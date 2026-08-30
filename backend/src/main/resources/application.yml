@@ -1,0 +1,33 @@
+spring:
+  application:
+    name: TrackDrop
+  datasource:
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/trackdrop}
+    username: ${POSTGRES_USER:trackdrop}
+    password: ${POSTGRES_PASSWORD:trackdrop}
+  flyway:
+    enabled: true
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+  session:
+    jdbc:
+      initialize-schema: never
+  web:
+    resources:
+      add-mappings: true
+
+server:
+  servlet:
+    session:
+      cookie:
+        http-only: true
+        same-site: lax
+        secure: ${SESSION_COOKIE_SECURE:false}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info

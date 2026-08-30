@@ -1,0 +1,24 @@
+:root {
+  font-family: Inter, Pretendard, "Noto Sans KR", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: #242722;
+  background: #f4f4ef;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  --paper: #f4f4ef;
+  --surface: #e9eae3;
+  --surface-subtle: #f8f8f4;
+  --ink: #242722;
+  --muted: #70756d;
+  --line: #ddded7;
+  --line-strong: #c8cac1;
+  --green: #3d9b6d;
+  --green-dark: #216746;
+  --amber: #d79b31;
+}
+
+* { box-sizing: border-box; }
+html { background: var(--paper); }
+body { margin: 0; min-width: 320px; min-height: 100vh; }
+button, input { font: inherit; }
+a { color: inherit; text-decoration: none; }
+button:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }

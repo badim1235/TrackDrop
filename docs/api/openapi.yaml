@@ -1,0 +1,39 @@
+openapi: 3.1.0
+info:
+  title: TrackDrop API
+  version: 0.1.0
+  description: Contract for the TrackDrop MVP HTTP API.
+  license:
+    name: MIT
+    identifier: MIT
+servers:
+  - url: /api/v1
+paths:
+  /system/health:
+    get:
+      operationId: getSystemHealth
+      summary: Check whether the API is available
+      tags: [System]
+      security: []
+      responses:
+        '200':
+          description: The API is available.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SystemHealthResponse'
+        '503':
+          description: The API is temporarily unavailable.
+components:
+  schemas:
+    SystemHealthResponse:
+      type: object
+      additionalProperties: false
+      required: [status, service]
+      properties:
+        status:
+          type: string
+          const: UP
+        service:
+          type: string
+          const: TrackDrop
