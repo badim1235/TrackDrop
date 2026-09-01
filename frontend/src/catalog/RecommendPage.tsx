@@ -198,7 +198,7 @@ export function RecommendPage() {
       <div className={styles.recommendPage}>
         <section className={styles.recommendSuccess} aria-labelledby="recommend-success-heading">
           <CircleCheck aria-hidden="true" size={38} />
-          <p className={styles.eyebrow}>TRACK DROPPED</p>
+          <p className={styles.eyebrow}>TRACK PICKED</p>
           <h1 id="recommend-success-heading">추천을 등록했어요.</h1>
           <div className={styles.successTrack}>
             {create.data.track.albumCoverUrl ? <img src={create.data.track.albumCoverUrl} alt="" /> : null}
@@ -229,7 +229,7 @@ export function RecommendPage() {
     <div className={styles.recommendPage}>
       <header className={styles.recommendHeader}>
         <div className={styles.recommendIcon}><Headphones aria-hidden="true" size={28} /></div>
-        <p className={styles.eyebrow}>DROP A TRACK</p>
+        <p className={styles.eyebrow}>PICK A TRACK</p>
         <h1>어떤 곡을 추천할까요?</h1>
         <p className={styles.recommendCopy}>곡이나 아티스트를 검색하고 추천할 한 곡을 골라보세요.</p>
       </header>

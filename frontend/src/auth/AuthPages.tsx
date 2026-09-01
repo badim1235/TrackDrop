@@ -59,7 +59,7 @@ function AuthHeading({ mode }: { mode: 'login' | 'join' }) {
   return (
     <div className={styles.authHeading}>
       <span className={styles.authIcon}>{mode === 'login' ? <LogIn aria-hidden="true" /> : <UserPlus aria-hidden="true" />}</span>
-      <p className={styles.eyebrow}>{mode === 'login' ? 'WELCOME BACK' : 'JOIN TRACKDROP'}</p>
+      <p className={styles.eyebrow}>{mode === 'login' ? 'WELCOME BACK' : 'JOIN TRACKPICK'}</p>
       <h1>{mode === 'login' ? '다시 음악을 발견해요.' : '익명으로 음악을 나눠요.'}</h1>
     </div>
   )

@@ -223,7 +223,7 @@ export function HomePage() {
     <div className={styles.pageStack}>
       <section className={styles.intro}>
         <div>
-          <p className={styles.eyebrow}>TODAY&apos;S DROPS</p>
+          <p className={styles.eyebrow}>TODAY&apos;S PICKS</p>
           <h1>오늘 발견한 음악을<br />함께 차트에 <span className={styles.mobileBreak}>올려보세요.</span></h1>
         </div>
         <NavLink className={styles.primaryAction} to="/recommend">
@@ -277,9 +277,9 @@ export function RecentPage() {
   return (
     <div className={styles.pageStack}>
       <header className={styles.pageHeader}>
-        <p className={styles.eyebrow}>RECENT DROPS</p>
+        <p className={styles.eyebrow}>RECENT PICKS</p>
         <h1>최근 등록된 곡</h1>
-        <p>TrackDrop에 새롭게 소개된 음악</p>
+        <p>TrackPick에 새롭게 소개된 음악</p>
       </header>
       <section className={styles.recentFeed} aria-label="최근 등록 목록" aria-busy={recent.isPending}>
         {recent.isPending ? (

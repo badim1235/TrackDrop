@@ -58,9 +58,9 @@ function App() {
   return (
     <div className={styles.app}>
       <header className={styles.topBar}>
-        <NavLink className={styles.brand} to="/" aria-label="TrackDrop 홈">
+        <NavLink className={styles.brand} to="/" aria-label="TrackPick 홈">
           <span className={styles.brandMark}><Music2 aria-hidden="true" size={20} /></span>
-          <span>TrackDrop</span>
+          <span>TrackPick</span>
         </NavLink>
         <Navigation />
         <AccountArea />
@@ -79,7 +79,7 @@ function App() {
         </Routes>
       </main>
 
-      <footer className={styles.footer}>TrackDrop · 매일 00:00 KST 차트 갱신</footer>
+      <footer className={styles.footer}>TrackPick · 매일 00:00 KST 차트 갱신</footer>
       <div className={styles.mobileNav}><Navigation /></div>
     </div>
   )
