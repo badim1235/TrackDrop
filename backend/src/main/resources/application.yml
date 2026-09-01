@@ -7,11 +7,14 @@ spring:
     password: ${POSTGRES_PASSWORD:trackdrop}
   flyway:
     enabled: true
+    baseline-on-migrate: true
+    baseline-version: 0
   jpa:
     hibernate:
       ddl-auto: validate
     open-in-view: false
   session:
+    timeout: 7d
     jdbc:
       initialize-schema: never
   web:
@@ -19,12 +22,34 @@ spring:
       add-mappings: true
 
 server:
+  port: ${PORT:8080}
   servlet:
     session:
       cookie:
+        name: TRACKDROP_SESSION
         http-only: true
         same-site: lax
         secure: ${SESSION_COOKIE_SECURE:false}
+
+trackdrop:
+  security:
+    ip-hash-secret: ${IP_HASH_SECRET:trackdrop-local-development-secret}
+    remember-me-seconds: 604800
+  supabase:
+    url: ${SUPABASE_URL:http://127.0.0.1:54321}
+    publishable-key: ${SUPABASE_PUBLISHABLE_KEY:local-development-publishable-key}
+    email-redirect-url: ${AUTH_EMAIL_REDIRECT_URL:${RENDER_EXTERNAL_URL:http://127.0.0.1:5173}/login?verified=1}
+    password-recovery-redirect-url: ${AUTH_PASSWORD_RECOVERY_REDIRECT_URL:${RENDER_EXTERNAL_URL:http://127.0.0.1:5173}/recover/password}
+  music:
+    apple:
+      base-url: ${APPLE_ITUNES_BASE_URL:https://itunes.apple.com}
+      storefront: KR
+      result-limit: 20
+      calls-per-minute: 15
+      cache-ttl: 5m
+      cache-maximum-size: 500
+      connect-timeout: 2s
+      read-timeout: 4s
 
 management:
   endpoints:

@@ -10,7 +10,7 @@ FROM eclipse-temurin:25-jdk-alpine AS backend-build
 WORKDIR /workspace/backend
 COPY backend/.mvn/ .mvn/
 COPY backend/mvnw backend/pom.xml ./
-RUN ./mvnw -B -DskipTests dependency:go-offline
+RUN chmod +x mvnw && ./mvnw -B -DskipTests dependency:go-offline
 COPY backend/src/ src/
 COPY --from=frontend-build /workspace/frontend/dist/ src/main/resources/static/
 RUN ./mvnw -B -DskipTests package

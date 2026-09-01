@@ -10,7 +10,7 @@
 | [`product/user-flows.md`](product/user-flows.md) | 화면 구조, 사용자 행동, UI 상태와 오류 복구 | Accepted |
 | [`architecture/erd.md`](architecture/erd.md) | Entity, 관계, DB 제약, 트랜잭션과 Ranking snapshot | Accepted |
 | [`architecture/tech-stack.md`](architecture/tech-stack.md) | Phase 5 언어, framework, DB, 보안, 테스트와 배포 단위 | Accepted |
-| [`api/rest-api.md`](api/rest-api.md) | HTTP endpoint, request/response, 오류와 pagination 계약 | Proposed |
+| [`api/rest-api.md`](api/rest-api.md) | HTTP endpoint, request/response, 오류와 pagination 계약 | Accepted, OpenAPI 우선 |
 | [`architecture/adr/`](architecture/adr/) | 중요한 기술 선택의 배경, 결정과 결과 | 결정별 상태 |
 | [`history/`](history/) | Phase 진행 당시의 분석과 결정 기록 | Historical |
 
@@ -44,7 +44,15 @@
 | 1 | MVP 요구사항 | 완료, history 보존 |
 | 2 | 화면 및 User Flow | 완료, living document로 전환 |
 | 3 | ERD | 완료, living document로 전환 |
-| 4 | REST API | 초안 완료, 최종 승인 대기 |
+| 4 | REST API | 완료, OpenAPI로 전환 |
 | 5 | 기술 스택 결정 | 완료 |
-| 6 | 프로젝트 초기 구조 생성 | 다음 작업 |
-| 7~15 | 인증부터 배포·포트폴리오 문서까지 | 대기 |
+| 6 | 프로젝트 초기 구조 생성 | 완료 |
+| 7 | 계정·세션 인증 | 완료 |
+| 8 | Apple 음악 검색 | 완료 |
+| 9 | 곡 추천 등록·Apple 장르·최초 Vote·일일 추천권 | 완료 |
+| 10 | 기존 곡 Vote·당일 중복 방지·추천권 연동 | 완료 |
+| 11 | 오늘 전체·장르별 실시간 차트·Top 20 더 보기 | 완료 |
+| 12 | 홈의 오늘 추천·최근 등록 데이터 연결 | 완료 |
+| 13 | 과거 Daily Ranking snapshot·읽기 전용 차트 | 대기 |
+| 14 | 배포·운영 설정 | 대기 |
+| 15 | 포트폴리오 문서·최종 검수 | 대기 |

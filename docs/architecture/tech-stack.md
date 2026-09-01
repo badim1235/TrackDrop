@@ -42,9 +42,9 @@ TrackDrop MVP를 구현하기 전에 언어와 framework 이름뿐 아니라 DB,
 | Database | PostgreSQL 18 최신 minor, UTF-8, ICU collation |
 | Migration | Flyway SQL migration, Hibernate DDL 생성 금지 |
 | Identifier | PostgreSQL `uuid`, application에서 UUID v4 생성 |
-| Security | Spring Security 7, server-side session, CSRF 활성화 |
+| Security | Supabase Auth 이메일 인증 + Spring Security 7 server-side session, CSRF 활성화 |
 | Session | Spring Session JDBC를 PostgreSQL에 저장 |
-| Password | `DelegatingPasswordEncoder` + BCrypt cost 12, `{bcrypt}` prefix 저장 |
+| Password | Supabase Auth가 저장·검증하고 TrackDrop DB에는 자격 증명을 저장하지 않음 |
 | External API | Spring `RestClient` 기반 Apple iTunes Search API adapter |
 | Frontend | Node.js 24 LTS, React 19.2, TypeScript, Vite 8 |
 | Routing/state | React Router 8 Declarative Mode, TanStack Query 5 |
@@ -138,7 +138,7 @@ UUID v7과 sequence 기반 bigint는 실제 규모에서 index locality 또는 �
 ### 5.4 문자열 정규화와 정렬
 
 - DB encoding은 UTF-8이다.
-- 로그인 ID와 이메일은 application에서 trim, Unicode normalization과 case normalization을 수행한 별도 normalized column에 Unique Constraint를 건다.
+- 이메일은 application에서 trim, Unicode normalization과 case normalization을 수행한 별도 normalized column에 Unique Constraint를 건다.
 - 화면 표시용 원문과 비교용 normalized 값을 분리한다.
 - Track 순위는 PostgreSQL ICU 기반 case-insensitive collation과 마지막 `track_id` tie-break로 결정한다.
 - migration에서 `und-u-ks-level2`, `deterministic=false` 기반 전용 collation을 생성하고 실제 Docker image에서 정렬 fixture test를 수행한다.
@@ -167,9 +167,9 @@ Spring `JdbcClient` 또는 `JdbcTemplate`을 다음에 사용한다.
 
 ## 6. 인증과 보안
 
-### 6.1 Spring Security와 JDBC Session
+### 6.1 Supabase Auth, Spring Security와 JDBC Session
 
-인증은 `HttpOnly`, `Secure`, `SameSite=Lax` cookie 기반 server session을 사용한다. [Spring Session JDBC](https://docs.spring.io/spring-session/reference/guides/boot-jdbc.html)를 통해 session을 PostgreSQL에 저장한다.
+회원가입, 이메일 확인과 비밀번호 검증·재설정은 Supabase Auth에 위임한다. TrackDrop backend는 이메일 로그인 성공 후 `HttpOnly`, `Secure`, `SameSite=Lax` cookie 기반 application session을 만들고 [Spring Session JDBC](https://docs.spring.io/spring-session/reference/guides/boot-jdbc.html)를 통해 PostgreSQL에 저장한다.
 
 선택 이유:
 
@@ -182,9 +182,9 @@ JWT는 발급 후 강제 만료와 보안 정책이 복잡해지고 현재 same-
 
 ### 6.2 Password
 
-[Spring Security의 `DelegatingPasswordEncoder`](https://docs.spring.io/spring-security/reference/7.0/features/authentication/password-storage.html)를 사용하고 신규 password는 BCrypt cost 12로 저장한다. hash에는 `{bcrypt}` algorithm prefix를 포함해 추후 Argon2 등으로 migration할 수 있게 한다.
+TrackDrop DB에는 원문 비밀번호와 비밀번호 hash를 저장하지 않는다. backend는 가입·로그인 요청을 Supabase Auth API로 전달하며, application log에는 비밀번호나 이메일을 기록하지 않는다.
 
-BCrypt cost는 production 환경에서 인증 latency를 측정해 조정한다. 원문 password, hash, login ID 전체와 이메일을 application log에 기록하지 않는다.
+Password 입력은 8~16 code point로 제한하고 영문자와 숫자를 각각 하나 이상 요구한다. 공백과 제어문자는 거부하며 특수문자는 별도 whitelist 없이 허용한다. 입력을 trim하거나 대소문자 변환하지 않고 Supabase Auth에 전달한다.
 
 ### 6.3 Browser security
 
@@ -194,6 +194,8 @@ BCrypt cost는 production 환경에서 인증 latency를 측정해 조정한다.
 - session fixation 방지, logout invalidation과 cookie rotation은 Spring Security 기본 기능을 사용한다.
 - login과 signup에는 IP 및 normalized account 기준 rate limit을 적용한다.
 - 공개 오류에서 ID 또는 이메일 존재 여부를 과도하게 구분하지 않는다.
+- login과 signup은 IP당 분당 30회로 제한한다. 한 IP에서 한 시간 안에 성공한 가입 5개를 허용하고 다음 가입 시도부터 24시간 차단하되, 실패한 가입은 성공 횟수에 포함하지 않는다.
+- 로그인 실패 횟수로 계정을 잠그지 않는다. 일반 login은 session cookie, 유지 login은 인증 요청마다 만료가 7일 뒤로 이동하는 persistent session cookie를 사용한다.
 
 ## 7. Apple Catalog Adapter
 
@@ -367,7 +369,7 @@ Production:
 1. Java 25 + Spring Boot 4.1 + Maven
 2. PostgreSQL 18 + Flyway + JPA/JdbcClient 혼합
 3. UUID v4와 ICU case-insensitive collation
-4. Spring Security + Spring Session JDBC + BCrypt 12
+4. Supabase Auth + Spring Security + Spring Session JDBC
 5. React 19.2 + TypeScript + Vite 8 + Node 24 LTS
 6. OpenAPI 3.1 contract-first
 7. `@Scheduled` + DB claim 기반 Ranking batch

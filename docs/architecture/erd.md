@@ -33,7 +33,7 @@ Phase 5에서 기술 스택과 DB 제품을 결정하기 전이므로 물리적�
 
 | 주제 | 설계 결정 |
 | --- | --- |
-| 계정 | `users`에 로그인 ID, 비밀번호 해시, 복구용 이메일, 공개 닉네임을 함께 저장하되 공개 projection에서는 닉네임만 노출한다. |
+| 계정 | Supabase Auth UUID를 `users.id`로 사용하고 TrackDrop DB에는 이메일, 확인 시각과 공개 닉네임만 저장한다. 비밀번호는 저장하지 않는다. |
 | Track | 내부 `tracks`와 provider별 `track_provider_refs`를 분리한다. 외부 ID는 Track의 PK가 아니다. |
 | Artist | MVP에서는 별도 Entity를 만들지 않고 Track의 `artist_name` 표시 문자열로 저장한다. |
 | Genre | Track은 `track_genres`를 통해 여러 장르를 가질 수 있다. 등록자는 활성화된 시스템 장르 목록에서 Recommendation의 대표 장르 하나를 선택한다. |
@@ -120,8 +120,6 @@ erDiagram
 
     USERS {
         id id PK
-        string login_id UK
-        string password_hash
         string email
         string email_normalized UK
         instant email_verified_at
@@ -235,12 +233,10 @@ erDiagram
 
 | 컬럼 | 필수 | 제약/정책 |
 | --- | --- | --- |
-| `id` | Y | PK, 외부에는 opaque value로 노출 |
-| `login_id` | Y | 정규화된 로그인 ID, Unique |
-| `password_hash` | Y | 평문 저장 금지 |
-| `email` | Y | 사용자가 입력한 복구용 이메일, 공개 금지 |
+| `id` | Y | PK, Supabase Auth user UUID |
+| `email` | Y | 로그인·복구 이메일, 공개 금지 |
 | `email_normalized` | Y | 소문자화 및 앞뒤 공백 제거, Unique |
-| `email_verified_at` | N | 향후 이메일 인증 완료 시각. MVP에서는 null 허용 |
+| `email_verified_at` | Y | Supabase 이메일 확인 완료 시각 |
 | `public_nickname` | Y | 자동 생성 공개 닉네임, Unique |
 | `status` | Y | `ACTIVE`, `SUSPENDED`, `WITHDRAWN` 후보 |
 | `created_at` | Y | UTC instant |
@@ -248,13 +244,12 @@ erDiagram
 
 주요 제약:
 
-- `UNIQUE(login_id)`
 - `UNIQUE(email_normalized)`
 - `UNIQUE(public_nickname)`
 - 공개 User 응답에는 `public_nickname`만 포함한다.
-- 본인 계정 응답에서도 이메일은 기본적으로 마스킹한다.
+- 본인 계정 응답에서만 로그인 이메일을 포함한다.
 
-로그인 ID의 허용 문자와 대소문자 정책은 Phase 4 인증 API 명세에서 정한다. 이메일 인증 token 테이블은 실제 복구 기능을 구현할 때 추가하며 MVP ERD에는 넣지 않는다.
+비밀번호는 8~16자이며 공백 없이 영문자와 숫자를 각각 하나 이상 포함하고 특수문자는 선택이다. 이메일 확인 token, 비밀번호 hash와 복구 token은 Supabase Auth의 `auth` schema에서 관리하므로 TrackDrop ERD에 중복 정의하지 않는다.
 
 ### 6.2 genres
 
@@ -270,18 +265,32 @@ erDiagram
 
 | sort_order | code | display_name |
 | ---: | --- | --- |
-| 10 | `hip-hop` | Hip-Hop |
-| 20 | `rnb` | R&B |
-| 30 | `rock` | Rock |
-| 40 | `indie` | Indie |
-| 50 | `electronic` | Electronic |
-| 60 | `jazz` | Jazz |
-| 70 | `k-pop` | K-Pop |
-| 80 | `j-pop` | J-Pop |
-| 90 | `pop` | Pop |
-| 100 | `other` | Other |
+| 10 | `alternative` | Alternative |
+| 20 | `blues` | Blues |
+| 30 | `childrens-music` | Children's Music |
+| 40 | `christian-gospel` | Christian & Gospel |
+| 50 | `classical` | Classical |
+| 60 | `comedy` | Comedy |
+| 70 | `country` | Country |
+| 80 | `dance` | Dance |
+| 90 | `electronic` | Electronic |
+| 100 | `fitness-workout` | Fitness & Workout |
+| 110 | `hip-hop-rap` | Hip-Hop/Rap |
+| 120 | `jazz` | Jazz |
+| 130 | `k-pop` | K-Pop |
+| 140 | `j-pop` | J-Pop |
+| 150 | `latino` | Latino |
+| 160 | `metal` | Metal |
+| 170 | `pop` | Pop |
+| 180 | `rnb-soul` | R&B/Soul |
+| 190 | `reggae` | Reggae |
+| 200 | `rock` | Rock |
+| 210 | `singer-songwriter` | Singer/Songwriter |
+| 220 | `soundtrack` | Soundtrack |
+| 230 | `world` | World |
+| 240 | `other` | Other |
 
-`ALL`은 Genre가 아니라 조회 scope이므로 테이블에 저장하지 않는다. `sort_order`는 중간 장르 삽입을 고려해 10 단위로 둔다.
+`ALL`은 Genre가 아니라 조회 scope이므로 테이블에 저장하지 않는다. 목록은 Apple Music 최상위 카탈로그 장르를 기준으로 하며 KR용 `J-Pop`과 분류 예외용 `Other`를 포함한다. `sort_order`는 중간 장르 삽입을 고려해 10 단위로 둔다.
 
 ### 6.3 tracks
 
@@ -293,6 +302,8 @@ erDiagram
 | `album_name` | N | 앨범 정보가 없는 provider 응답 허용 |
 | `album_cover_url` | N | 외부 이미지 URL |
 | `isrc` | N | provider 간 연결 힌트, Unique 아님 |
+| `explicit` | Y | provider의 Explicit 표시 |
+| `provider_genre_name` | N | Apple이 최종 검증 시 반환한 원본 대표 장르명 |
 | `created_at` | Y | 내부 Track 최초 저장 시각 |
 | `updated_at` | Y | 메타데이터 갱신 시각 |
 
@@ -620,8 +631,8 @@ MVP 도메인 Entity에는 자동 `ON DELETE CASCADE`를 기본값으로 사용�
 
 ## 12. 주요 불변식
 
-1. 로그인 ID, 정규화 이메일, 공개 닉네임은 각각 고유하다.
-2. 공개 응답은 로그인 ID와 이메일을 노출하지 않는다.
+1. Supabase Auth UUID, 정규화 이메일과 공개 닉네임은 각각 고유하다.
+2. 공개 응답은 이메일을 노출하지 않는다.
 3. provider와 external Track ID 조합은 고유하다.
 4. Track당 Recommendation은 하나다.
 5. Recommendation의 대표 Genre는 해당 Track의 TrackGenre에 존재한다.
@@ -641,7 +652,7 @@ MVP 도메인 Entity에는 자동 `ON DELETE CASCADE`를 기본값으로 사용�
 - 사용자 Taste Profile과 통계
 - 댓글과 팔로우
 - Playlist
-- 이메일 인증 token 및 비밀번호 재설정 token
+- Supabase Auth가 관리하는 이메일 인증 token 및 비밀번호 재설정 token
 - 관리자 계정과 역할/권한 테이블
 - Redis cache 자료구조
 - Rising, Hidden Gems, Weekly/Monthly Ranking
@@ -652,7 +663,7 @@ MVP 도메인 Entity에는 자동 `ON DELETE CASCADE`를 기본값으로 사용�
 
 ## 14. REST API 계약에 미치는 영향
 
-- 회원가입 요청은 `loginId`, `password`, `email`을 받고 공개 닉네임은 서버가 생성한다.
+- 회원가입 요청은 `email`, `password`를 받고 이메일 확인 후 최초 로그인 시 공개 닉네임을 생성한다.
 - 공개 User 응답과 본인 Account 응답을 분리한다.
 - 외부 검색 결과와 내부 Track 응답을 서로 다른 schema로 정의한다.
 - Recommendation 생성은 provider 식별자, 대표 `genreId`, 한줄평만 받는다.
@@ -671,7 +682,7 @@ MVP 도메인 Entity에는 자동 `ON DELETE CASCADE`를 기본값으로 사용�
 1. Track당 Recommendation을 영구히 하나만 유지하고, 한줄평 숨김 후에도 재등록을 허용하지 않는다.
 2. 등록자는 시스템의 활성 Genre 목록에서 대표 장르 하나를 선택하며 자유 입력하지 않는다.
 3. Vote 취소를 MVP에서 제공하지 않는다.
-4. 로그인 ID와 이메일을 각각 계정당 Unique로 제한한다.
+4. Supabase Auth UUID와 이메일을 각각 계정당 Unique로 제한한다.
 5. 한줄평 신고 대상을 Recommendation으로 한정한다.
 6. Ranking은 `ROW_NUMBER`를 사용하고 동일 득표 수는 Track 이름 오름차순으로 정렬한다.
 

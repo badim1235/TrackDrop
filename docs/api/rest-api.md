@@ -178,17 +178,15 @@ Path=/
 ### 6.3 개인정보
 
 - 공개 Track과 Recommendation 응답에는 공개 닉네임만 포함한다.
-- 로그인 ID와 이메일은 공개 API에 포함하지 않는다.
-- Account API의 이메일은 마스킹된 값만 반환한다.
+- 이메일은 공개 API에 포함하지 않고 본인의 Account API에서만 반환한다.
 - 비밀번호, 비밀번호 hash, session, CSRF token은 로그에 기록하지 않는다.
 
 ### 6.4 입력 기본값
 
 | 필드 | MVP 권장 검증 |
 | --- | --- |
-| `loginId` | 4~30자, 영문·숫자·`.`·`_`·`-`, 대소문자 비구분 |
-| `password` | 8~64자 |
-| `email` | RFC 호환 parser 사용, 최대 254자, 정규화 후 Unique |
+| `password` | 8~16자, 영문자·숫자 필수, 공백 불가 |
+| `email` | RFC 호환 parser 사용, 최대 320자, Supabase Auth와 정규화 email 기준 Unique |
 | `comment` | trim 후 1~120자 |
 | music search `query` | trim 후 2~100자 |
 | report `details` | 선택, 최대 500자 |
@@ -240,7 +238,7 @@ Path=/
     "id": "recommendation-id",
     "comment": "후반부 기타가 들어올 때까지 꼭 들어보세요.",
     "commentAvailable": true,
-    "recommenderNickname": "sleepy-fox-238",
+    "recommenderNickname": "새벽리듬4881",
     "createdAt": "2026-08-30T10:00:00Z"
   },
   "todayVoteCount": 142,
@@ -291,6 +289,7 @@ Path=/
 | Method | Path | 인증 | 설명 |
 | --- | --- | --- | --- |
 | GET | `/auth/csrf` | 공개 | CSRF token 발급 |
+| GET | `/auth/login-id-availability` | 공개 | 가입 아이디 형식·중복 확인 |
 | POST | `/auth/sign-up` | 공개 | 계정 생성 및 로그인 |
 | POST | `/auth/login` | 공개 | 로그인 |
 | POST | `/auth/logout` | 필요 | 로그아웃 |
@@ -329,46 +328,32 @@ Request:
 
 ```json
 {
-  "loginId": "listener_01",
-  "password": "correct horse battery staple",
-  "email": "listener@example.com"
+  "email": "listener@example.com",
+  "password": "chatgpt5555"
 }
 ```
 
 처리:
 
-1. 입력을 검증하고 login ID와 이메일을 정규화한다.
-2. 각각의 Unique Constraint를 확인한다.
-3. 비밀번호를 검증된 password hashing algorithm으로 hash한다.
-4. 고유 공개 닉네임을 생성한다.
-5. 계정을 생성하고 로그인 session을 발급한다.
+1. 이메일과 비밀번호 정책을 검증한다.
+2. 가입 요청 제한을 확인한다.
+3. Supabase Auth에 가입을 요청한다.
+4. Supabase Auth가 확인 메일을 발송한다.
+5. 이메일 확인 후 최초 로그인에서 TrackDrop 공개 닉네임과 profile을 생성한다.
 
-Response `201 Created`:
+Response `202 Accepted`:
 
 ```json
 {
-  "account": {
-    "publicNickname": "sleepy-fox-238",
-    "maskedEmail": "l******r@example.com",
-    "emailVerified": false,
-    "createdAt": "2026-08-30T12:00:00Z"
-  },
-  "quota": {
-    "date": "2026-08-30",
-    "limit": 4,
-    "used": 0,
-    "remaining": 4,
-    "resetAt": "2026-08-30T15:00:00Z"
-  }
+  "emailVerificationRequired": true
 }
 ```
 
 오류:
 
 - `400 VALIDATION_FAILED`
-- `409 LOGIN_ID_TAKEN`
-- `409 EMAIL_TAKEN`
 - `429 RATE_LIMITED`
+- `503 AUTH_PROVIDER_UNAVAILABLE`
 
 ### 9.3 POST /auth/login
 
@@ -378,20 +363,38 @@ Request:
 
 ```json
 {
-  "loginId": "listener_01",
-  "password": "correct horse battery staple"
+  "email": "listener@example.com",
+  "password": "chatgpt5555",
+  "rememberMe": true
 }
 ```
 
-Response `200 OK`: 회원가입 성공과 같은 account/quota 구조이며 session cookie를 갱신한다.
+Response `200 OK`: account/quota 구조를 반환하고 TrackDrop session cookie를 발급한다.
+
+`rememberMe=false`는 브라우저 종료 시 제거되는 session cookie를 사용한다. `true`이면 마지막 인증 요청부터 7일 동안 유효한 persistent session cookie를 사용하며 인증 요청마다 만료를 갱신한다. 여러 기기 session을 허용하고 logout은 현재 session만 무효화한다.
+
+입력과 제한 정책:
+
+- 가입 password는 8~16자이고 공백 없이 영문자와 숫자를 각각 하나 이상 포함한다. 특수문자는 선택이다.
+- login, signup과 비밀번호 복구 요청을 합산해 IP당 분당 30회로 제한한다.
+- 동일 IP에서 한 시간 내 성공한 가입은 5개까지 허용하고 다음 가입 시도부터 24시간 차단한다.
 
 오류:
 
-- `401 INVALID_CREDENTIALS`: ID 존재 여부와 비밀번호 오류를 구분하지 않는다.
+- `401 INVALID_CREDENTIALS`: 이메일 존재 여부, 미확인 상태와 비밀번호 오류를 구분하지 않는다.
 - `403 ACCOUNT_SUSPENDED`
 - `429 RATE_LIMITED`
 
-### 9.4 POST /auth/logout
+### 9.4 POST /auth/password-recovery
+
+- 공개 session에서도 CSRF token 필요
+- Supabase Auth에 이메일 기반 비밀번호 재설정 메일 발송을 요청한다.
+- 계정 존재 여부를 응답에서 구분하지 않는다.
+- Response `202 Accepted`
+
+Supabase 복구 링크가 `/recover/password`로 돌아오면 frontend는 URL fragment의 짧은 수명 access token을 읽어 새 비밀번호와 함께 `POST /auth/password-reset`으로 전달한다. backend는 token을 로그나 DB에 저장하지 않고 Supabase Auth의 사용자 갱신 API에 전달한다. 성공 응답은 `204 No Content`다.
+
+### 9.5 POST /auth/logout
 
 - 인증 및 CSRF 필요
 - server session 무효화
@@ -399,17 +402,16 @@ Response `200 OK`: 회원가입 성공과 같은 account/quota 구조이며 sess
 
 동일 session에서 중복 제출돼도 server 오류를 만들지 않는다.
 
-### 9.5 GET /me
+### 9.6 GET /me
 
 Response `200 OK`:
 
 ```json
 {
   "account": {
-    "loginId": "listener_01",
-    "publicNickname": "sleepy-fox-238",
-    "maskedEmail": "l******r@example.com",
-    "emailVerified": false,
+    "email": "listener@example.com",
+    "publicNickname": "새벽리듬4881",
+    "emailVerified": true,
     "createdAt": "2026-08-30T12:00:00Z"
   },
   "quota": {
@@ -422,7 +424,7 @@ Response `200 OK`:
 }
 ```
 
-MVP에는 ID 찾기, 비밀번호 재설정, 이메일 인증 endpoint를 포함하지 않는다.
+이메일은 로그인 ID이므로 별도 ID 찾기 API를 제공하지 않는다. 이메일 확인과 비밀번호 재설정 token은 Supabase Auth가 관리한다.
 
 ## 10. Genre API
 
@@ -437,14 +439,14 @@ Response `200 OK`:
 ```json
 {
   "items": [
-    { "id": "genre-1", "code": "hip-hop", "displayName": "Hip-Hop", "sortOrder": 10 },
-    { "id": "genre-2", "code": "rnb", "displayName": "R&B", "sortOrder": 20 },
-    { "id": "genre-3", "code": "rock", "displayName": "Rock", "sortOrder": 30 }
+    { "id": "genre-1", "code": "alternative", "displayName": "Alternative", "sortOrder": 10 },
+    { "id": "genre-2", "code": "hip-hop-rap", "displayName": "Hip-Hop/Rap", "sortOrder": 110 },
+    { "id": "genre-3", "code": "k-pop", "displayName": "K-Pop", "sortOrder": 130 }
   ]
 }
 ```
 
-Recommendation 화면은 이 응답에서 대표 Genre 하나를 선택한다. 임의 문자열 장르는 제출할 수 없다.
+Recommendation 화면은 Apple Music이 검색 결과에 반환한 장르와 같은 항목을 기본값으로 제안하고, 이 응답에서 대표 Genre 하나를 선택한다. 임의 문자열 장르는 제출할 수 없다.
 
 ## 11. Home API
 
@@ -463,7 +465,7 @@ Response `200 OK`:
   "trending": {
     "title": "오늘 가장 많이 추천받는 노래",
     "items": [],
-    "viewAllPath": "/charts?date=2026-08-30&genre=all"
+    "viewAllPath": "/chart"
   },
   "recent": {
     "title": "최근 등록된 노래",
@@ -473,7 +475,7 @@ Response `200 OK`:
 }
 ```
 
-`items`는 TrackCard 목록이다. 두 섹션 중 하나의 조회가 실패하면 전체 endpoint를 부분 성공으로 만들지 않고 server 내부에서 재시도·관측한다. 최종 실패 시 명확한 오류를 반환한다.
+`items`는 TrackCard 목록이며 각 섹션은 최대 6곡을 반환한다. 두 섹션 중 하나의 조회가 실패하면 전체 endpoint를 부분 성공으로 만들지 않고 server 내부에서 재시도·관측한다. 최종 실패 시 명확한 오류를 반환한다.
 
 ## 12. Track API
 
@@ -489,6 +491,7 @@ Response `200 OK`:
 
 ```json
 {
+  "asOf": "2026-08-30T12:30:00Z",
   "items": [],
   "page": {
     "size": 20,
@@ -544,13 +547,16 @@ Query:
 | 이름 | 필수 | 설명 |
 | --- | --- | --- |
 | `query` | Y | 곡명, 아티스트 또는 조합, 2~100자 |
-| `cursor` | N | provider pagination cursor를 감싼 opaque cursor |
+
+MVP는 `country=KR`, `media=music`, `entity=song`, `limit=20`, `explicit=Yes`로 검색한다. Apple이 반환한 관련도 순서를 유지하며 별도 pagination은 제공하지 않는다.
 
 Response `200 OK`:
 
 ```json
 {
   "provider": "APPLE_MUSIC",
+  "storefront": "KR",
+  "attribution": "Music preview provided courtesy of iTunes",
   "items": [
     {
       "provider": "APPLE_MUSIC",
@@ -560,7 +566,8 @@ Response `200 OK`:
       "albumName": "In Rainbows",
       "albumCoverUrl": "https://provider.example/cover.jpg",
       "releaseYear": 2007,
-      "isrc": "GBSTK0700001",
+      "isrc": null,
+      "explicit": true,
       "preview": {
         "available": true,
         "provider": "APPLE_MUSIC",
@@ -568,21 +575,19 @@ Response `200 OK`:
         "startPosition": "PROVIDER_SELECTED",
         "url": "https://provider.example/preview.m4a"
       },
+      "externalUrl": "https://music.apple.com/kr/album/example/external-id",
       "existingTrack": {
-        "registered": true,
-        "trackId": "track-id"
+        "registered": false,
+        "trackId": null
       }
     }
-  ],
-  "page": {
-    "size": 20,
-    "hasMore": false,
-    "nextCursor": null
-  }
+  ]
 }
 ```
 
 검색 결과는 후보일 뿐 신뢰 가능한 쓰기 payload가 아니다. Recommendation 제출 시 server가 `provider + externalTrackId`로 metadata를 다시 검증한다.
+
+`explicit=true`인 결과도 숨기지 않고 UI에서 `Explicit`으로 표시한다. Apple iTunes Search API는 ISRC를 항상 제공하지 않으므로 `isrc`는 nullable이다.
 
 `startPosition=PROVIDER_SELECTED`는 preview가 곡의 0초부터 시작한다고 보장하지 않는다는 뜻이다. server와 client는 URL을 다운로드하거나 잘라서 인트로 파일을 만들지 않으며, YouTube URL 또는 video ID를 preview 대체값으로 반환하지 않는다.
 
@@ -873,14 +878,13 @@ Response `201 Created`:
 | 404 | `RECOMMENDATION_NOT_FOUND` | Recommendation 없음 |
 | 404 | `RANKING_NOT_AVAILABLE` | 과거 snapshot 비정상 누락 |
 | 404 | `NOT_FOUND` | 존재하지 않거나 feature flag로 비활성화된 route |
-| 409 | `LOGIN_ID_TAKEN` | 로그인 ID 중복 |
-| 409 | `EMAIL_TAKEN` | 이메일 중복 |
 | 409 | `ALREADY_RECOMMENDED` | Track 동시/중복 등록 |
 | 409 | `ALREADY_VOTED` | 오늘 동일 Track 중복 Vote |
 | 409 | `ALREADY_REPORTED` | 동일 한줄평 중복 신고 |
 | 429 | `DAILY_LIMIT_EXCEEDED` | 오늘의 추천 4회 소진 |
 | 429 | `RATE_LIMITED` | 보안 또는 provider 보호용 요청 제한 |
 | 503 | `MUSIC_PROVIDER_UNAVAILABLE` | 외부 Music API 장애 또는 timeout |
+| 503 | `AUTH_PROVIDER_UNAVAILABLE` | Supabase Auth 장애 또는 timeout |
 | 500 | `INTERNAL_ERROR` | 예상하지 못한 내부 오류 |
 
 `DAILY_LIMIT_EXCEEDED`에는 `quota`와 `resetAt`을, `RATE_LIMITED`에는 가능한 경우 `Retry-After` header를 제공한다.
@@ -947,7 +951,7 @@ Redis는 Phase 1 MVP 필수 요소가 아니다. cache를 추가하더라도 다
 구조화 로그와 metric 후보:
 
 - endpoint, status, latency, traceId
-- 로그인 성공/실패 횟수(비밀번호와 ID 원문 제외)
+- 로그인 성공/실패 횟수(비밀번호와 이메일 원문 제외)
 - Recommendation/Vote 성공 및 domain conflict 수
 - `DAILY_LIMIT_EXCEEDED` 수
 - provider별 검색 latency, timeout, error rate
@@ -959,8 +963,8 @@ Redis는 Phase 1 MVP 필수 요소가 아니다. cache를 추가하더라도 다
 
 필수 contract test:
 
-1. 회원가입 시 이메일·로그인 ID 중복 오류
-2. 공개 응답에서 이메일과 로그인 ID 미노출
+1. 회원가입 요청이 Supabase Auth로 전달되고 이메일 확인을 요구함
+2. 공개 응답에서 이메일 미노출
 3. CSRF 누락 쓰기 요청 거부
 4. Recommendation 생성 시 최초 Vote와 quota 동시 반영
 5. 동일 Track 동시 등록의 단일 성공
@@ -983,7 +987,7 @@ Redis는 Phase 1 MVP 필수 요소가 아니다. cache를 추가하더라도 다
 2. 관계형 DB 제품과 Unicode case-insensitive collation
 3. PK 물리 타입
 4. server session 저장 방식
-5. password hashing algorithm과 security framework
+5. Supabase Auth와 application session의 책임 경계
 6. Apple iTunes Search API adapter의 storefront, 호출 제한, Store attribution 적용 방식
 7. API 문서화 도구와 OpenAPI 생성 방식
 8. scheduler 실행 및 중복 방지 방식

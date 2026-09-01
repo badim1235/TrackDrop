@@ -1,34 +1,101 @@
 package io.github.badim1235.trackdrop.shared.config;
 
+import io.github.badim1235.trackdrop.identity.AuthRateLimitFilter;
+import io.github.badim1235.trackdrop.identity.RememberedSessionCookie;
+import io.github.badim1235.trackdrop.identity.RememberedSessionFilter;
+import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
-import org.springframework.security.core.userdetails.UserDetailsService;
-import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.logout.HttpStatusReturningLogoutSuccessHandler;
+import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
+import org.springframework.security.web.context.SecurityContextHolderFilter;
+import org.springframework.security.web.context.SecurityContextRepository;
+import org.springframework.security.web.csrf.CsrfFilter;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
+import org.springframework.session.web.http.DefaultCookieSerializer;
 
 @Configuration(proxyBeanMethods = false)
 public class SecurityConfiguration {
 
 	@Bean
-	UserDetailsService userDetailsService() {
-		return username -> {
-			throw new UsernameNotFoundException("Account authentication is not implemented yet");
-		};
+	SecurityContextRepository securityContextRepository() {
+		return new HttpSessionSecurityContextRepository();
 	}
 
 	@Bean
-	SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+	DefaultCookieSerializer cookieSerializer(
+		@Value("${server.servlet.session.cookie.secure}") boolean secure
+	) {
+		DefaultCookieSerializer serializer = new DefaultCookieSerializer();
+		serializer.setCookieName("TRACKDROP_SESSION");
+		serializer.setCookiePath("/");
+		serializer.setUseBase64Encoding(false);
+		serializer.setSameSite("Lax");
+		serializer.setUseHttpOnlyCookie(true);
+		serializer.setUseSecureCookie(secure);
+		return serializer;
+	}
+
+	@Bean
+	SecurityFilterChain securityFilterChain(
+		HttpSecurity http,
+		AuthRateLimitFilter authRateLimitFilter,
+		RememberedSessionCookie rememberedSessionCookie,
+		SecurityContextRepository securityContextRepository
+	) throws Exception {
+		CookieCsrfTokenRepository csrfRepository = CookieCsrfTokenRepository.withHttpOnlyFalse();
+		csrfRepository.setCookiePath("/");
+
 		http
 			.authorizeHttpRequests(authorize -> authorize
-				.requestMatchers("/", "/index.html", "/chart", "/recommend", "/assets/**", "/favicon.ico").permitAll()
+				.requestMatchers(
+					"/", "/index.html", "/chart", "/recent", "/recommend", "/login", "/join", "/me",
+					"/recover/id", "/recover/password",
+					"/assets/**", "/favicon.ico").permitAll()
+				.requestMatchers(HttpMethod.GET,
+					"/api/v1/auth/csrf").permitAll()
+				.requestMatchers(HttpMethod.GET, "/api/v1/genres").permitAll()
+				.requestMatchers(HttpMethod.GET, "/api/v1/home", "/api/v1/tracks/recent").permitAll()
+				.requestMatchers(HttpMethod.GET, "/api/v1/charts/daily").permitAll()
+				.requestMatchers(HttpMethod.POST,
+					"/api/v1/auth/sign-up", "/api/v1/auth/login",
+					"/api/v1/auth/password-recovery", "/api/v1/auth/password-reset").permitAll()
 				.requestMatchers("/api/v1/system/health", "/actuator/health", "/actuator/info").permitAll()
 				.anyRequest().authenticated())
-			.csrf(csrf -> csrf.csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse()))
+			.csrf(csrf -> csrf.csrfTokenRepository(csrfRepository))
+			.securityContext(context -> context.securityContextRepository(securityContextRepository))
+			.exceptionHandling(exceptions -> exceptions
+				.authenticationEntryPoint((request, response, exception) -> writeSecurityError(
+					response, HttpStatus.UNAUTHORIZED.value(), "UNAUTHENTICATED", "로그인이 필요합니다."))
+				.accessDeniedHandler((request, response, exception) -> writeSecurityError(
+					response, HttpStatus.FORBIDDEN.value(), "CSRF_TOKEN_INVALID", "요청을 다시 시도해 주세요.")))
+			.logout(logout -> logout
+				.logoutUrl("/api/v1/auth/logout")
+				.logoutSuccessHandler(new HttpStatusReturningLogoutSuccessHandler(HttpStatus.NO_CONTENT)))
 			.formLogin(form -> form.disable())
-			.httpBasic(basic -> basic.disable());
+			.httpBasic(basic -> basic.disable())
+			.addFilterBefore(authRateLimitFilter, CsrfFilter.class)
+			.addFilterAfter(new RememberedSessionFilter(rememberedSessionCookie), SecurityContextHolderFilter.class);
 
 		return http.build();
+	}
+
+	private static void writeSecurityError(
+		HttpServletResponse response,
+		int status,
+		String code,
+		String message
+	) throws java.io.IOException {
+		response.setStatus(status);
+		response.setContentType("application/json;charset=UTF-8");
+		response.getWriter().printf(
+			"{\"error\":{\"code\":\"%s\",\"message\":\"%s\"}}",
+			code,
+			message);
 	}
 }

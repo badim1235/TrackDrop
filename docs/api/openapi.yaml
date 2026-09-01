@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: TrackDrop API
-  version: 0.1.0
+  version: 0.9.0
   description: Contract for the TrackDrop MVP HTTP API.
   license:
     name: MIT
@@ -24,7 +24,390 @@ paths:
                 $ref: '#/components/schemas/SystemHealthResponse'
         '503':
           description: The API is temporarily unavailable.
+  /auth/csrf:
+    get:
+      operationId: getCsrfToken
+      summary: Issue a CSRF token for a browser session
+      tags: [Identity]
+      security: []
+      responses:
+        '200':
+          description: A CSRF token was issued.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CsrfResponse'
+  /auth/sign-up:
+    post:
+      operationId: signUp
+      summary: Register an email account with Supabase Auth
+      tags: [Identity]
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/CsrfHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignUpRequest'
+      responses:
+        '202':
+          description: Registration was accepted and a verification email was requested.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SignUpResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+  /auth/login:
+    post:
+      operationId: login
+      summary: Create an authenticated session
+      tags: [Identity]
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/CsrfHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Login succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountResponse'
+        '401':
+          $ref: '#/components/responses/AuthenticationError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+  /auth/password-recovery:
+    post:
+      operationId: requestPasswordRecovery
+      summary: Send a Supabase password recovery email
+      tags: [Identity]
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/CsrfHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PasswordRecoveryRequest'
+      responses:
+        '202':
+          description: The recovery request was accepted.
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+  /auth/password-reset:
+    post:
+      operationId: resetPassword
+      summary: Replace the password using a Supabase recovery access token
+      tags: [Identity]
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/CsrfHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PasswordResetRequest'
+      responses:
+        '204':
+          description: The password was updated.
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/AuthenticationError'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+  /auth/logout:
+    post:
+      operationId: logout
+      summary: Invalidate the current browser session
+      tags: [Identity]
+      parameters:
+        - $ref: '#/components/parameters/CsrfHeader'
+      responses:
+        '204':
+          description: The current session was invalidated.
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+  /me:
+    get:
+      operationId: getMyAccount
+      summary: Read the current account and daily quota
+      tags: [Identity]
+      responses:
+        '200':
+          description: Current account details.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountResponse'
+        '401':
+          $ref: '#/components/responses/AuthenticationError'
+  /music/search:
+    get:
+      operationId: searchMusic
+      summary: Search the Apple music catalog for recommendation candidates
+      tags: [Catalog]
+      parameters:
+        - name: query
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 2
+            maxLength: 100
+      responses:
+        '200':
+          description: Up to 20 relevant songs from the KR storefront, including explicit tracks.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MusicSearchResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/AuthenticationError'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+        '503':
+          $ref: '#/components/responses/MusicProviderError'
+  /genres:
+    get:
+      operationId: getGenres
+      summary: List active Apple catalog genres available for recommendations
+      tags: [Catalog]
+      security: []
+      responses:
+        '200':
+          description: Active genres in display order.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenreResponse'
+  /home:
+    get:
+      operationId: getHome
+      summary: Read today's trending tracks and the latest recommendations
+      tags: [Home]
+      security:
+        - sessionCookie: []
+        - {}
+      responses:
+        '200':
+          description: Representative trending and recent tracks for the home screen.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HomeResponse'
+  /tracks/recent:
+    get:
+      operationId: getRecentTracks
+      summary: Read recommendations in reverse registration order
+      tags: [Home]
+      security:
+        - sessionCookie: []
+        - {}
+      parameters:
+        - name: cursor
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: A stable page of recently registered tracks.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecentTracksResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+  /charts/daily:
+    get:
+      operationId: getDailyChart
+      summary: Read today's live chart or a finalized past chart
+      tags: [Chart]
+      security:
+        - sessionCookie: []
+        - {}
+      parameters:
+        - name: date
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+        - name: genre
+          in: query
+          required: false
+          schema:
+            type: string
+            default: all
+        - name: cursor
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The live or finalized chart page.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DailyChartResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+  /recommendations:
+    post:
+      operationId: createRecommendation
+      summary: Register a new track with its first vote and consume one daily quota
+      tags: [Recommendation]
+      parameters:
+        - $ref: '#/components/parameters/CsrfHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateRecommendationRequest'
+      responses:
+        '201':
+          description: The track, recommendation, and first vote were created together.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateRecommendationResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/AuthenticationError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
+        '503':
+          $ref: '#/components/responses/MusicProviderError'
+  /tracks/{trackId}/votes:
+    post:
+      operationId: createVote
+      summary: Vote for an existing track today and consume one daily quota
+      tags: [Vote]
+      parameters:
+        - name: trackId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - $ref: '#/components/parameters/CsrfHeader'
+      responses:
+        '201':
+          description: The vote was created and the daily quota was updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateVoteResponse'
+        '401':
+          $ref: '#/components/responses/AuthenticationError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          description: The track does not exist.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+        '409':
+          description: The user has already voted for this track today.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+        '429':
+          $ref: '#/components/responses/RateLimitError'
 components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: TRACKDROP_SESSION
+  parameters:
+    CsrfHeader:
+      name: X-XSRF-TOKEN
+      in: header
+      required: true
+      schema:
+        type: string
+  responses:
+    ValidationError:
+      description: The request did not satisfy the input policy.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiErrorResponse'
+    ConflictError:
+      description: The login ID or normalized email already exists.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiErrorResponse'
+    AuthenticationError:
+      description: Authentication is required or the credentials are invalid.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiErrorResponse'
+    ForbiddenError:
+      description: The account or request is not permitted.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiErrorResponse'
+    NotFoundError:
+      description: The requested resource or finalized projection is not available.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiErrorResponse'
+    RateLimitError:
+      description: The client or server exceeded a protected request limit.
+      headers:
+        Retry-After:
+          schema:
+            type: integer
+            minimum: 1
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiErrorResponse'
+    MusicProviderError:
+      description: The external music provider is temporarily unavailable.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiErrorResponse'
   schemas:
     SystemHealthResponse:
       type: object
@@ -37,3 +420,652 @@ components:
         service:
           type: string
           const: TrackDrop
+    CsrfResponse:
+      type: object
+      additionalProperties: false
+      required: [token]
+      properties:
+        token:
+          type: string
+    SignUpResponse:
+      type: object
+      additionalProperties: false
+      required: [emailVerificationRequired]
+      properties:
+        emailVerificationRequired:
+          type: boolean
+          const: true
+    SignUpRequest:
+      type: object
+      additionalProperties: false
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 320
+        password:
+          type: string
+          minLength: 8
+          maxLength: 16
+          format: password
+    LoginRequest:
+      type: object
+      additionalProperties: false
+      required: [email, password, rememberMe]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          format: password
+        rememberMe:
+          type: boolean
+    PasswordRecoveryRequest:
+      type: object
+      additionalProperties: false
+      required: [email]
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 320
+    PasswordResetRequest:
+      type: object
+      additionalProperties: false
+      required: [accessToken, password]
+      properties:
+        accessToken:
+          type: string
+        password:
+          type: string
+          minLength: 8
+          maxLength: 16
+          format: password
+    AccountResponse:
+      type: object
+      additionalProperties: false
+      required: [account, quota]
+      properties:
+        account:
+          $ref: '#/components/schemas/Account'
+        quota:
+          $ref: '#/components/schemas/DailyQuota'
+    Account:
+      type: object
+      additionalProperties: false
+      required: [email, publicNickname, emailVerified, createdAt]
+      properties:
+        email:
+          type: string
+          format: email
+        publicNickname:
+          type: string
+        emailVerified:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+    DailyQuota:
+      type: object
+      additionalProperties: false
+      required: [date, limit, used, remaining, resetAt]
+      properties:
+        date:
+          type: string
+          format: date
+        limit:
+          type: integer
+          const: 4
+        used:
+          type: integer
+          minimum: 0
+          maximum: 4
+        remaining:
+          type: integer
+          minimum: 0
+          maximum: 4
+        resetAt:
+          type: string
+          format: date-time
+    MusicSearchResponse:
+      type: object
+      additionalProperties: false
+      required: [provider, storefront, attribution, items]
+      properties:
+        provider:
+          type: string
+          const: APPLE_MUSIC
+        storefront:
+          type: string
+          const: KR
+        attribution:
+          type: string
+          const: Music preview provided courtesy of iTunes
+        items:
+          type: array
+          maxItems: 20
+          items:
+            $ref: '#/components/schemas/MusicSearchItem'
+    MusicSearchItem:
+      type: object
+      additionalProperties: false
+      required:
+        - provider
+        - externalTrackId
+        - title
+        - artistName
+        - albumName
+        - albumCoverUrl
+        - releaseYear
+        - isrc
+        - explicit
+        - primaryGenreName
+        - preview
+        - externalUrl
+        - existingTrack
+      properties:
+        provider:
+          type: string
+          const: APPLE_MUSIC
+        externalTrackId:
+          type: string
+        title:
+          type: string
+        artistName:
+          type: string
+        albumName:
+          type: [string, 'null']
+        albumCoverUrl:
+          type: [string, 'null']
+          format: uri
+        releaseYear:
+          type: [integer, 'null']
+        isrc:
+          type: [string, 'null']
+        explicit:
+          type: boolean
+        primaryGenreName:
+          type: [string, 'null']
+        preview:
+          $ref: '#/components/schemas/MusicPreview'
+        externalUrl:
+          type: [string, 'null']
+          format: uri
+        existingTrack:
+          $ref: '#/components/schemas/ExistingTrack'
+    MusicPreview:
+      type: object
+      additionalProperties: false
+      required: [available, provider, kind, startPosition, url]
+      properties:
+        available:
+          type: boolean
+        provider:
+          type: string
+          const: APPLE_MUSIC
+        kind:
+          type: string
+          const: OFFICIAL_30_SECOND_CLIP
+        startPosition:
+          type: string
+          const: PROVIDER_SELECTED
+        url:
+          type: [string, 'null']
+          format: uri
+    ExistingTrack:
+      type: object
+      additionalProperties: false
+      required: [registered, trackId, hasVotedToday]
+      properties:
+        registered:
+          type: boolean
+        trackId:
+          type: [string, 'null']
+          format: uuid
+        hasVotedToday:
+          type: boolean
+    GenreResponse:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Genre'
+    Genre:
+      type: object
+      additionalProperties: false
+      required: [id, code, displayName, sortOrder]
+      properties:
+        id:
+          type: string
+          format: uuid
+        code:
+          type: string
+        displayName:
+          type: string
+        sortOrder:
+          type: integer
+    HomeResponse:
+      type: object
+      additionalProperties: false
+      required: [asOf, quota, trending, recent]
+      properties:
+        asOf:
+          type: string
+          format: date-time
+        quota:
+          oneOf:
+            - $ref: '#/components/schemas/DailyQuota'
+            - type: 'null'
+        trending:
+          $ref: '#/components/schemas/HomeSection'
+        recent:
+          $ref: '#/components/schemas/HomeSection'
+    HomeSection:
+      type: object
+      additionalProperties: false
+      required: [title, items, viewAllPath]
+      properties:
+        title:
+          type: string
+        items:
+          type: array
+          maxItems: 6
+          items:
+            $ref: '#/components/schemas/HomeTrackCard'
+        viewAllPath:
+          type: string
+    HomeTrackCard:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - title
+        - artistName
+        - albumName
+        - albumCoverUrl
+        - releaseYear
+        - explicit
+        - primaryGenre
+        - recommendation
+        - todayVoteCount
+        - viewer
+        - preview
+        - externalLinks
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        artistName:
+          type: string
+        albumName:
+          type: [string, 'null']
+        albumCoverUrl:
+          type: [string, 'null']
+          format: uri
+        releaseYear:
+          type: [integer, 'null']
+        explicit:
+          type: boolean
+        primaryGenre:
+          $ref: '#/components/schemas/Genre'
+        recommendation:
+          $ref: '#/components/schemas/HomeRecommendation'
+        todayVoteCount:
+          type: integer
+          minimum: 0
+        viewer:
+          oneOf:
+            - $ref: '#/components/schemas/HomeViewer'
+            - type: 'null'
+        preview:
+          $ref: '#/components/schemas/MusicPreview'
+        externalLinks:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExternalMusicLink'
+    HomeRecommendation:
+      type: object
+      additionalProperties: false
+      required: [id, comment, commentAvailable, recommenderNickname, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        comment:
+          type: [string, 'null']
+        commentAvailable:
+          type: boolean
+        recommenderNickname:
+          type: [string, 'null']
+        createdAt:
+          type: string
+          format: date-time
+    HomeViewer:
+      type: object
+      additionalProperties: false
+      required: [hasVotedToday]
+      properties:
+        hasVotedToday:
+          type: boolean
+    ExternalMusicLink:
+      type: object
+      additionalProperties: false
+      required: [provider, url]
+      properties:
+        provider:
+          type: string
+          const: APPLE_MUSIC
+        url:
+          type: string
+          format: uri
+    RecentTracksResponse:
+      type: object
+      additionalProperties: false
+      required: [asOf, items, page, quota]
+      properties:
+        asOf:
+          type: string
+          format: date-time
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/HomeTrackCard'
+        page:
+          $ref: '#/components/schemas/RecentTracksPage'
+        quota:
+          oneOf:
+            - $ref: '#/components/schemas/DailyQuota'
+            - type: 'null'
+    RecentTracksPage:
+      type: object
+      additionalProperties: false
+      required: [size, hasMore, nextCursor]
+      properties:
+        size:
+          type: integer
+          const: 20
+        hasMore:
+          type: boolean
+        nextCursor:
+          type: [string, 'null']
+    DailyChartResponse:
+      type: object
+      additionalProperties: false
+      required: [date, status, scope, asOf, items, page, quota, actions]
+      properties:
+        date:
+          type: string
+          format: date
+        status:
+          type: string
+          enum: [LIVE, FINAL]
+        scope:
+          $ref: '#/components/schemas/ChartScope'
+        asOf:
+          type: string
+          format: date-time
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChartItem'
+        page:
+          $ref: '#/components/schemas/ChartPage'
+        quota:
+          oneOf:
+            - $ref: '#/components/schemas/DailyQuota'
+            - type: 'null'
+        actions:
+          $ref: '#/components/schemas/ChartActions'
+    ChartScope:
+      type: object
+      additionalProperties: false
+      required: [type, genre]
+      properties:
+        type:
+          type: string
+          enum: [ALL, GENRE]
+        genre:
+          oneOf:
+            - $ref: '#/components/schemas/Genre'
+            - type: 'null'
+    ChartItem:
+      type: object
+      additionalProperties: false
+      required: [rank, voteCount, hasVotedToday, track]
+      properties:
+        rank:
+          type: integer
+          minimum: 1
+        voteCount:
+          type: integer
+          minimum: 1
+        hasVotedToday:
+          type: boolean
+        track:
+          $ref: '#/components/schemas/ChartTrack'
+    ChartTrack:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - title
+        - artistName
+        - albumName
+        - albumCoverUrl
+        - releaseYear
+        - explicit
+        - primaryGenre
+        - comment
+        - recommenderNickname
+        - preview
+        - externalUrl
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        artistName:
+          type: string
+        albumName:
+          type: [string, 'null']
+        albumCoverUrl:
+          type: [string, 'null']
+          format: uri
+        releaseYear:
+          type: [integer, 'null']
+        explicit:
+          type: boolean
+        primaryGenre:
+          $ref: '#/components/schemas/Genre'
+        comment:
+          type: [string, 'null']
+        recommenderNickname:
+          type: [string, 'null']
+        preview:
+          $ref: '#/components/schemas/RegisteredPreview'
+        externalUrl:
+          type: [string, 'null']
+          format: uri
+    ChartPage:
+      type: object
+      additionalProperties: false
+      required: [size, hasMore, nextCursor]
+      properties:
+        size:
+          type: integer
+          const: 20
+        hasMore:
+          type: boolean
+        nextCursor:
+          type: [string, 'null']
+    ChartActions:
+      type: object
+      additionalProperties: false
+      required: [canVote]
+      properties:
+        canVote:
+          type: boolean
+    CreateRecommendationRequest:
+      type: object
+      additionalProperties: false
+      required: [provider, externalTrackId, primaryGenreId, comment]
+      properties:
+        provider:
+          type: string
+          const: APPLE_MUSIC
+        externalTrackId:
+          type: string
+          minLength: 1
+          maxLength: 255
+        primaryGenreId:
+          type: string
+          format: uuid
+        comment:
+          type: string
+          minLength: 1
+          maxLength: 120
+    CreateRecommendationResponse:
+      type: object
+      additionalProperties: false
+      required: [track, recommendation, vote, quota]
+      properties:
+        track:
+          $ref: '#/components/schemas/RegisteredTrack'
+        recommendation:
+          $ref: '#/components/schemas/CreatedRecommendation'
+        vote:
+          $ref: '#/components/schemas/CreatedVote'
+        quota:
+          $ref: '#/components/schemas/DailyQuota'
+    RegisteredTrack:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - title
+        - artistName
+        - albumName
+        - albumCoverUrl
+        - releaseYear
+        - explicit
+        - primaryGenreName
+        - preview
+        - externalUrl
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        artistName:
+          type: string
+        albumName:
+          type: [string, 'null']
+        albumCoverUrl:
+          type: [string, 'null']
+          format: uri
+        releaseYear:
+          type: [integer, 'null']
+        explicit:
+          type: boolean
+        primaryGenreName:
+          type: [string, 'null']
+        preview:
+          $ref: '#/components/schemas/RegisteredPreview'
+        externalUrl:
+          type: [string, 'null']
+          format: uri
+    RegisteredPreview:
+      type: object
+      additionalProperties: false
+      required: [available, provider, url]
+      properties:
+        available:
+          type: boolean
+        provider:
+          type: string
+          const: APPLE_MUSIC
+        url:
+          type: [string, 'null']
+          format: uri
+    CreatedRecommendation:
+      type: object
+      additionalProperties: false
+      required: [id, primaryGenre, comment, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        primaryGenre:
+          $ref: '#/components/schemas/Genre'
+        comment:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+    CreatedVote:
+      type: object
+      additionalProperties: false
+      required: [created, votedOn]
+      properties:
+        created:
+          type: boolean
+          const: true
+        votedOn:
+          type: string
+          format: date
+    CreateVoteResponse:
+      type: object
+      additionalProperties: false
+      required: [vote, todayVoteCount, quota]
+      properties:
+        vote:
+          $ref: '#/components/schemas/Vote'
+        todayVoteCount:
+          type: integer
+          minimum: 1
+        quota:
+          $ref: '#/components/schemas/DailyQuota'
+    Vote:
+      type: object
+      additionalProperties: false
+      required: [trackId, votedOn, createdAt]
+      properties:
+        trackId:
+          type: string
+          format: uuid
+        votedOn:
+          type: string
+          format: date
+        createdAt:
+          type: string
+          format: date-time
+    ApiErrorResponse:
+      type: object
+      additionalProperties: false
+      required: [error]
+      properties:
+        error:
+          $ref: '#/components/schemas/ApiError'
+    ApiError:
+      type: object
+      additionalProperties: false
+      required: [code, message]
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        details:
+          type: object
+          additionalProperties: true
+security:
+  - sessionCookie: []

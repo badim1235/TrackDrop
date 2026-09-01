@@ -21,6 +21,244 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/auth/csrf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Issue a CSRF token for a browser session */
+        get: operations["getCsrfToken"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/sign-up": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Register an email account with Supabase Auth */
+        post: operations["signUp"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create an authenticated session */
+        post: operations["login"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/password-recovery": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Send a Supabase password recovery email */
+        post: operations["requestPasswordRecovery"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/password-reset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Replace the password using a Supabase recovery access token */
+        post: operations["resetPassword"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Invalidate the current browser session */
+        post: operations["logout"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read the current account and daily quota */
+        get: operations["getMyAccount"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/music/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Search the Apple music catalog for recommendation candidates */
+        get: operations["searchMusic"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/genres": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List active Apple catalog genres available for recommendations */
+        get: operations["getGenres"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/home": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read today's trending tracks and the latest recommendations */
+        get: operations["getHome"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tracks/recent": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read recommendations in reverse registration order */
+        get: operations["getRecentTracks"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/charts/daily": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read today's live chart or a finalized past chart */
+        get: operations["getDailyChart"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/recommendations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Register a new track with its first vote and consume one daily quota */
+        post: operations["createRecommendation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tracks/{trackId}/votes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Vote for an existing track today and consume one daily quota */
+        post: operations["createVote"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -31,9 +269,364 @@ export interface components {
             /** @constant */
             service: "TrackDrop";
         };
+        CsrfResponse: {
+            token: string;
+        };
+        SignUpResponse: {
+            /** @constant */
+            emailVerificationRequired: true;
+        };
+        SignUpRequest: {
+            /** Format: email */
+            email: string;
+            /** Format: password */
+            password: string;
+        };
+        LoginRequest: {
+            /** Format: email */
+            email: string;
+            /** Format: password */
+            password: string;
+            rememberMe: boolean;
+        };
+        PasswordRecoveryRequest: {
+            /** Format: email */
+            email: string;
+        };
+        PasswordResetRequest: {
+            accessToken: string;
+            /** Format: password */
+            password: string;
+        };
+        AccountResponse: {
+            account: components["schemas"]["Account"];
+            quota: components["schemas"]["DailyQuota"];
+        };
+        Account: {
+            /** Format: email */
+            email: string;
+            publicNickname: string;
+            emailVerified: boolean;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        DailyQuota: {
+            /** Format: date */
+            date: string;
+            /** @constant */
+            limit: 4;
+            used: number;
+            remaining: number;
+            /** Format: date-time */
+            resetAt: string;
+        };
+        MusicSearchResponse: {
+            /** @constant */
+            provider: "APPLE_MUSIC";
+            /** @constant */
+            storefront: "KR";
+            /** @constant */
+            attribution: "Music preview provided courtesy of iTunes";
+            items: components["schemas"]["MusicSearchItem"][];
+        };
+        MusicSearchItem: {
+            /** @constant */
+            provider: "APPLE_MUSIC";
+            externalTrackId: string;
+            title: string;
+            artistName: string;
+            albumName: string | null;
+            /** Format: uri */
+            albumCoverUrl: string | null;
+            releaseYear: number | null;
+            isrc: string | null;
+            explicit: boolean;
+            primaryGenreName: string | null;
+            preview: components["schemas"]["MusicPreview"];
+            /** Format: uri */
+            externalUrl: string | null;
+            existingTrack: components["schemas"]["ExistingTrack"];
+        };
+        MusicPreview: {
+            available: boolean;
+            /** @constant */
+            provider: "APPLE_MUSIC";
+            /** @constant */
+            kind: "OFFICIAL_30_SECOND_CLIP";
+            /** @constant */
+            startPosition: "PROVIDER_SELECTED";
+            /** Format: uri */
+            url: string | null;
+        };
+        ExistingTrack: {
+            registered: boolean;
+            /** Format: uuid */
+            trackId: string | null;
+            hasVotedToday: boolean;
+        };
+        GenreResponse: {
+            items: components["schemas"]["Genre"][];
+        };
+        Genre: {
+            /** Format: uuid */
+            id: string;
+            code: string;
+            displayName: string;
+            sortOrder: number;
+        };
+        HomeResponse: {
+            /** Format: date-time */
+            asOf: string;
+            quota: components["schemas"]["DailyQuota"] | null;
+            trending: components["schemas"]["HomeSection"];
+            recent: components["schemas"]["HomeSection"];
+        };
+        HomeSection: {
+            title: string;
+            items: components["schemas"]["HomeTrackCard"][];
+            viewAllPath: string;
+        };
+        HomeTrackCard: {
+            /** Format: uuid */
+            id: string;
+            title: string;
+            artistName: string;
+            albumName: string | null;
+            /** Format: uri */
+            albumCoverUrl: string | null;
+            releaseYear: number | null;
+            explicit: boolean;
+            primaryGenre: components["schemas"]["Genre"];
+            recommendation: components["schemas"]["HomeRecommendation"];
+            todayVoteCount: number;
+            viewer: components["schemas"]["HomeViewer"] | null;
+            preview: components["schemas"]["MusicPreview"];
+            externalLinks: components["schemas"]["ExternalMusicLink"][];
+        };
+        HomeRecommendation: {
+            /** Format: uuid */
+            id: string;
+            comment: string | null;
+            commentAvailable: boolean;
+            recommenderNickname: string | null;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        HomeViewer: {
+            hasVotedToday: boolean;
+        };
+        ExternalMusicLink: {
+            /** @constant */
+            provider: "APPLE_MUSIC";
+            /** Format: uri */
+            url: string;
+        };
+        RecentTracksResponse: {
+            /** Format: date-time */
+            asOf: string;
+            items: components["schemas"]["HomeTrackCard"][];
+            page: components["schemas"]["RecentTracksPage"];
+            quota: components["schemas"]["DailyQuota"] | null;
+        };
+        RecentTracksPage: {
+            /** @constant */
+            size: 20;
+            hasMore: boolean;
+            nextCursor: string | null;
+        };
+        DailyChartResponse: {
+            /** Format: date */
+            date: string;
+            /** @enum {string} */
+            status: "LIVE" | "FINAL";
+            scope: components["schemas"]["ChartScope"];
+            /** Format: date-time */
+            asOf: string;
+            items: components["schemas"]["ChartItem"][];
+            page: components["schemas"]["ChartPage"];
+            quota: components["schemas"]["DailyQuota"] | null;
+            actions: components["schemas"]["ChartActions"];
+        };
+        ChartScope: {
+            /** @enum {string} */
+            type: "ALL" | "GENRE";
+            genre: components["schemas"]["Genre"] | null;
+        };
+        ChartItem: {
+            rank: number;
+            voteCount: number;
+            hasVotedToday: boolean;
+            track: components["schemas"]["ChartTrack"];
+        };
+        ChartTrack: {
+            /** Format: uuid */
+            id: string;
+            title: string;
+            artistName: string;
+            albumName: string | null;
+            /** Format: uri */
+            albumCoverUrl: string | null;
+            releaseYear: number | null;
+            explicit: boolean;
+            primaryGenre: components["schemas"]["Genre"];
+            comment: string | null;
+            recommenderNickname: string | null;
+            preview: components["schemas"]["RegisteredPreview"];
+            /** Format: uri */
+            externalUrl: string | null;
+        };
+        ChartPage: {
+            /** @constant */
+            size: 20;
+            hasMore: boolean;
+            nextCursor: string | null;
+        };
+        ChartActions: {
+            canVote: boolean;
+        };
+        CreateRecommendationRequest: {
+            /** @constant */
+            provider: "APPLE_MUSIC";
+            externalTrackId: string;
+            /** Format: uuid */
+            primaryGenreId: string;
+            comment: string;
+        };
+        CreateRecommendationResponse: {
+            track: components["schemas"]["RegisteredTrack"];
+            recommendation: components["schemas"]["CreatedRecommendation"];
+            vote: components["schemas"]["CreatedVote"];
+            quota: components["schemas"]["DailyQuota"];
+        };
+        RegisteredTrack: {
+            /** Format: uuid */
+            id: string;
+            title: string;
+            artistName: string;
+            albumName: string | null;
+            /** Format: uri */
+            albumCoverUrl: string | null;
+            releaseYear: number | null;
+            explicit: boolean;
+            primaryGenreName: string | null;
+            preview: components["schemas"]["RegisteredPreview"];
+            /** Format: uri */
+            externalUrl: string | null;
+        };
+        RegisteredPreview: {
+            available: boolean;
+            /** @constant */
+            provider: "APPLE_MUSIC";
+            /** Format: uri */
+            url: string | null;
+        };
+        CreatedRecommendation: {
+            /** Format: uuid */
+            id: string;
+            primaryGenre: components["schemas"]["Genre"];
+            comment: string;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        CreatedVote: {
+            /** @constant */
+            created: true;
+            /** Format: date */
+            votedOn: string;
+        };
+        CreateVoteResponse: {
+            vote: components["schemas"]["Vote"];
+            todayVoteCount: number;
+            quota: components["schemas"]["DailyQuota"];
+        };
+        Vote: {
+            /** Format: uuid */
+            trackId: string;
+            /** Format: date */
+            votedOn: string;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        ApiErrorResponse: {
+            error: components["schemas"]["ApiError"];
+        };
+        ApiError: {
+            code: string;
+            message: string;
+            details?: {
+                [key: string]: unknown;
+            };
+        };
     };
-    responses: never;
-    parameters: never;
+    responses: {
+        /** @description The request did not satisfy the input policy. */
+        ValidationError: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ApiErrorResponse"];
+            };
+        };
+        /** @description The login ID or normalized email already exists. */
+        ConflictError: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ApiErrorResponse"];
+            };
+        };
+        /** @description Authentication is required or the credentials are invalid. */
+        AuthenticationError: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ApiErrorResponse"];
+            };
+        };
+        /** @description The account or request is not permitted. */
+        ForbiddenError: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ApiErrorResponse"];
+            };
+        };
+        /** @description The requested resource or finalized projection is not available. */
+        NotFoundError: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ApiErrorResponse"];
+            };
+        };
+        /** @description The client or server exceeded a protected request limit. */
+        RateLimitError: {
+            headers: {
+                "Retry-After"?: number;
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ApiErrorResponse"];
+            };
+        };
+        /** @description The external music provider is temporarily unavailable. */
+        MusicProviderError: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ApiErrorResponse"];
+            };
+        };
+    };
+    parameters: {
+        CsrfHeader: string;
+    };
     requestBodies: never;
     headers: never;
     pathItems: never;
@@ -65,6 +658,371 @@ export interface operations {
                 };
                 content?: never;
             };
+        };
+    };
+    getCsrfToken: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A CSRF token was issued. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CsrfResponse"];
+                };
+            };
+        };
+    };
+    signUp: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-XSRF-TOKEN": components["parameters"]["CsrfHeader"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SignUpRequest"];
+            };
+        };
+        responses: {
+            /** @description Registration was accepted and a verification email was requested. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignUpResponse"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            409: components["responses"]["ConflictError"];
+            429: components["responses"]["RateLimitError"];
+        };
+    };
+    login: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-XSRF-TOKEN": components["parameters"]["CsrfHeader"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LoginRequest"];
+            };
+        };
+        responses: {
+            /** @description Login succeeded. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccountResponse"];
+                };
+            };
+            401: components["responses"]["AuthenticationError"];
+            403: components["responses"]["ForbiddenError"];
+            429: components["responses"]["RateLimitError"];
+        };
+    };
+    requestPasswordRecovery: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-XSRF-TOKEN": components["parameters"]["CsrfHeader"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PasswordRecoveryRequest"];
+            };
+        };
+        responses: {
+            /** @description The recovery request was accepted. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["ValidationError"];
+            429: components["responses"]["RateLimitError"];
+        };
+    };
+    resetPassword: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-XSRF-TOKEN": components["parameters"]["CsrfHeader"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PasswordResetRequest"];
+            };
+        };
+        responses: {
+            /** @description The password was updated. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["ValidationError"];
+            401: components["responses"]["AuthenticationError"];
+            429: components["responses"]["RateLimitError"];
+        };
+    };
+    logout: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-XSRF-TOKEN": components["parameters"]["CsrfHeader"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The current session was invalidated. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["ForbiddenError"];
+        };
+    };
+    getMyAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current account details. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccountResponse"];
+                };
+            };
+            401: components["responses"]["AuthenticationError"];
+        };
+    };
+    searchMusic: {
+        parameters: {
+            query: {
+                query: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Up to 20 relevant songs from the KR storefront, including explicit tracks. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MusicSearchResponse"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            401: components["responses"]["AuthenticationError"];
+            429: components["responses"]["RateLimitError"];
+            503: components["responses"]["MusicProviderError"];
+        };
+    };
+    getGenres: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Active genres in display order. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenreResponse"];
+                };
+            };
+        };
+    };
+    getHome: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Representative trending and recent tracks for the home screen. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HomeResponse"];
+                };
+            };
+        };
+    };
+    getRecentTracks: {
+        parameters: {
+            query?: {
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A stable page of recently registered tracks. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecentTracksResponse"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+        };
+    };
+    getDailyChart: {
+        parameters: {
+            query?: {
+                date?: string;
+                genre?: string;
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The live or finalized chart page. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DailyChartResponse"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            404: components["responses"]["NotFoundError"];
+        };
+    };
+    createRecommendation: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-XSRF-TOKEN": components["parameters"]["CsrfHeader"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateRecommendationRequest"];
+            };
+        };
+        responses: {
+            /** @description The track, recommendation, and first vote were created together. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreateRecommendationResponse"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            401: components["responses"]["AuthenticationError"];
+            403: components["responses"]["ForbiddenError"];
+            409: components["responses"]["ConflictError"];
+            429: components["responses"]["RateLimitError"];
+            503: components["responses"]["MusicProviderError"];
+        };
+    };
+    createVote: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-XSRF-TOKEN": components["parameters"]["CsrfHeader"];
+            };
+            path: {
+                trackId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The vote was created and the daily quota was updated. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreateVoteResponse"];
+                };
+            };
+            401: components["responses"]["AuthenticationError"];
+            403: components["responses"]["ForbiddenError"];
+            /** @description The track does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description The user has already voted for this track today. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            429: components["responses"]["RateLimitError"];
         };
     };
 }
