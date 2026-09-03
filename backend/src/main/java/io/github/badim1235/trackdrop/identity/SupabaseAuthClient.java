@@ -5,6 +5,7 @@ import java.time.Instant;
 import java.time.Duration;
 import java.net.http.HttpClient;
 import java.util.UUID;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
@@ -21,6 +22,7 @@ public class SupabaseAuthClient implements SupabaseAuthGateway {
 	private final ObjectMapper objectMapper;
 	private final SupabaseAuthProperties properties;
 
+	@Autowired
 	public SupabaseAuthClient(
 		ObjectMapper objectMapper,
 		SupabaseAuthProperties properties
