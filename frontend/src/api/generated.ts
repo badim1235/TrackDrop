@@ -476,8 +476,8 @@ export interface components {
             externalUrl: string | null;
         };
         ChartPage: {
-            /** @constant */
-            size: 20;
+            /** @enum {integer} */
+            size: 20 | 30;
             hasMore: boolean;
             nextCursor: string | null;
         };

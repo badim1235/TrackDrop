@@ -901,7 +901,7 @@ components:
       properties:
         size:
           type: integer
-          const: 20
+          enum: [20, 30]
         hasMore:
           type: boolean
         nextCursor:

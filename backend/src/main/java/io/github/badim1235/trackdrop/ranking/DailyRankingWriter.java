@@ -16,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Component
 class DailyRankingWriter {
 	private static final Duration STALE_RUN_TIMEOUT = Duration.ofMinutes(30);
+	private static final int SNAPSHOT_SIZE = 50;
 
 	private final JdbcClient jdbcClient;
 
@@ -130,15 +131,18 @@ class DailyRankingWriter {
 					gen_random_uuid(), :runId, :rankingDate, 'ALL',
 					NULL, track_id, rank, vote_count, :createdAt
 				FROM all_ranked
+				WHERE rank <= :snapshotSize
 				UNION ALL
 				SELECT
 					gen_random_uuid(), :runId, :rankingDate, 'GENRE',
 					genre_id, track_id, rank, vote_count, :createdAt
 				FROM genre_ranked
+				WHERE rank <= :snapshotSize
 				""")
 			.param("runId", runId)
 			.param("rankingDate", rankingDate)
 			.param("createdAt", createdAt)
+			.param("snapshotSize", SNAPSHOT_SIZE)
 			.update();
 
 		int completed = jdbcClient.sql("""

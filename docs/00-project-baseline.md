@@ -31,12 +31,12 @@ TrackPick은 익명 계정 사용자들이 자신이 좋아하는 음악을 소�
 | 신규 소개 | 외부 카탈로그에서 Track을 선택하고 시스템 장르 하나와 1~120자 한줄평으로 Recommendation을 생성한다. 생성자의 첫 Vote도 같은 트랜잭션에서 생성되고 추천권 1회를 소비한다. |
 | 기존 곡 지지 | 등록된 Track에 오늘의 Vote를 생성하며 추천권 1회를 소비한다. |
 | 중복 | 같은 사용자는 같은 Track에 같은 날짜로 한 번만 Vote할 수 있다. Track당 활성 Recommendation은 하나다. |
-| 홈 | 오늘 Vote가 많은 Track과 최근 등록된 Track을 별도 섹션으로 표시한다. |
+| 홈 | 오늘 Vote가 많은 Track과 오늘 등록된 Track을 별도 섹션으로 표시한다. 날짜가 바뀌면 최근 등록 목록도 새 날짜 기준으로 초기화한다. |
 | 장르 | Apple Music의 최상위 카탈로그 장르명을 기준으로 관리한다. 검색 곡의 Apple 장르를 기본값으로 제안하되 사용자가 활성 목록에서 대표 장르 하나를 다시 선택할 수 있으며 자유 입력은 허용하지 않는다. KR에서 사용하는 `K-Pop`, `J-Pop`과 provider 분류 예외를 위한 `Other`를 포함한다. |
 | 차트 | 전체 및 장르별 Daily Chart를 제공하고 추천순 Top 20을 먼저 표시한 뒤 더 보기를 지원한다. |
 | 순위 | `ROW_NUMBER`를 사용한다. Vote 수 내림차순, Track 이름의 대소문자를 구분하지 않는 오름차순, 아티스트명 오름차순, Track ID 오름차순으로 고유 순서를 정한다. |
 | 오늘 차트 | 오늘의 Vote를 실시간 집계하는 `LIVE` 차트다. |
-| 과거 차트 | 자정 배치로 확정한 `DailyRanking` snapshot을 `FINAL` 읽기 전용 목록으로 제공한다. 과거 화면에서는 Vote와 신규 추천을 제공하지 않는다. |
+| 과거 차트 | 자정 배치로 전체·장르별 Top 50을 확정한 `DailyRanking` snapshot을 `FINAL` 읽기 전용 목록으로 제공한다. 화면은 20곡을 먼저 보여주고 더 보기로 나머지 30곡을 제공하며, Vote와 신규 추천은 제공하지 않는다. |
 | 음악 검색 | 첫 provider adapter는 Apple iTunes Search API다. `KR` storefront에서 Explicit 곡을 포함한 관련도순 상위 20곡을 표시하고 Explicit 여부를 명시한다. 내부 Track ID와 외부 provider ID를 분리하고 가능한 경우 ISRC를 보존한다. |
 | 미리듣기 | Apple이 공식 제공한 30초 preview URL만 원본에서 스트리밍한다. 시작 위치는 provider가 선택하므로 인트로라고 보장하지 않는다. |
 | 재생 금지 사항 | YouTube player/embed를 사용하지 않고 음원을 다운로드, 절단, 변환, 캐시 또는 재호스팅하지 않는다. |

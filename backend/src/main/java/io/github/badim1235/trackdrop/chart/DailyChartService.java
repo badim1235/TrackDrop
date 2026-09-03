@@ -34,7 +34,10 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 class DailyChartService {
 	private static final ZoneId SERVICE_ZONE = ZoneId.of("Asia/Seoul");
-	private static final int PAGE_SIZE = 20;
+	private static final int LIVE_PAGE_SIZE = 20;
+	private static final int FINAL_FIRST_PAGE_SIZE = 20;
+	private static final int FINAL_REMAINDER_PAGE_SIZE = 30;
+	private static final int FINAL_CHART_SIZE = 50;
 	private static final UUID EMPTY_UUID = new UUID(0, 0);
 	private static final RowMapper<Item> ITEM_ROW_MAPPER = DailyChartService::mapItem;
 	private static final String LIVE_CHART_SQL = """
@@ -127,6 +130,7 @@ class DailyChartService {
 		  AND daily_ranking.scope_type = :scopeType
 		  AND (:allGenres = TRUE OR daily_ranking.genre_id = :genreId)
 		  AND daily_ranking.rank > :afterRank
+		  AND daily_ranking.rank <= :finalChartSize
 		ORDER BY daily_ranking.rank
 		LIMIT :queryLimit
 		""";
@@ -192,12 +196,13 @@ class DailyChartService {
 			.param("genreId", selectedGenreId)
 			.param("viewerId", selectedViewerId)
 			.param("afterRank", cursorState.afterRank())
-			.param("queryLimit", PAGE_SIZE + 1)
+			.param("queryLimit", LIVE_PAGE_SIZE + 1)
 			.query(ITEM_ROW_MAPPER)
 			.list();
 
 		DailyQuotaSnapshot quota = viewerId == null ? null : quotaService.current(viewerId);
-		return response(chartDate, Status.LIVE, genre, cursorState, queriedItems, quota, true);
+		return response(
+			chartDate, Status.LIVE, genre, cursorState, queriedItems, LIVE_PAGE_SIZE, quota, true);
 	}
 
 	private DailyChartResponse getFinal(
@@ -217,6 +222,9 @@ class DailyChartService {
 		}
 
 		UUID selectedGenreId = genre.map(Genre::id).orElse(EMPTY_UUID);
+		int pageSize = cursorState.afterRank() == 0
+			? FINAL_FIRST_PAGE_SIZE
+			: FINAL_REMAINDER_PAGE_SIZE;
 		List<Item> queriedItems = jdbcClient.sql(FINAL_CHART_SQL)
 			.param("runId", run.id())
 			.param("chartDate", chartDate)
@@ -224,11 +232,12 @@ class DailyChartService {
 			.param("allGenres", genre.isEmpty())
 			.param("genreId", selectedGenreId)
 			.param("afterRank", cursorState.afterRank())
-			.param("queryLimit", PAGE_SIZE + 1)
+			.param("finalChartSize", FINAL_CHART_SIZE)
+			.param("queryLimit", pageSize + 1)
 			.query(ITEM_ROW_MAPPER)
 			.list();
 
-		return response(chartDate, Status.FINAL, genre, cursorState, queriedItems, null, false);
+		return response(chartDate, Status.FINAL, genre, cursorState, queriedItems, pageSize, null, false);
 	}
 
 	private static DailyChartResponse response(
@@ -237,11 +246,12 @@ class DailyChartService {
 		Optional<Genre> genre,
 		CursorState cursorState,
 		List<Item> queriedItems,
+		int pageSize,
 		DailyQuotaSnapshot quota,
 		boolean canVote
 	) {
-		boolean hasMore = queriedItems.size() > PAGE_SIZE;
-		List<Item> items = hasMore ? List.copyOf(queriedItems.subList(0, PAGE_SIZE)) : queriedItems;
+		boolean hasMore = queriedItems.size() > pageSize;
+		List<Item> items = hasMore ? List.copyOf(queriedItems.subList(0, pageSize)) : queriedItems;
 		String nextCursor = hasMore
 			? encodeCursor(new CursorState(chartDate, cursorState.genreCode(), cursorState.asOf(), items.getLast().rank()))
 			: null;
@@ -252,7 +262,7 @@ class DailyChartService {
 			new Scope(genre.isPresent() ? "GENRE" : "ALL", genre.orElse(null)),
 			cursorState.asOf(),
 			items,
-			new Page(PAGE_SIZE, hasMore, nextCursor),
+			new Page(pageSize, hasMore, nextCursor),
 			quota,
 			new Actions(canVote));
 	}

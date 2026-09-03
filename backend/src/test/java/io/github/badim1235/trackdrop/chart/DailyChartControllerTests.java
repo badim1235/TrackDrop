@@ -180,7 +180,7 @@ class DailyChartControllerTests {
 		UUID user = createUsers(1).getFirst();
 		UUID rock = genreId("rock");
 		LocalDate yesterday = LocalDate.now(SERVICE_ZONE).minusDays(1);
-		for (int index = 1; index <= 21; index++) {
+		for (int index = 1; index <= 55; index++) {
 			insertTrack("Past Track %02d".formatted(index), "Artist", rock, user, List.of(user), yesterday);
 		}
 
@@ -190,6 +190,7 @@ class DailyChartControllerTests {
 			.andExpect(jsonPath("$.status").value("FINAL"))
 			.andExpect(jsonPath("$.items.length()").value(20))
 			.andExpect(jsonPath("$.items[0].track.title").value("Past Track 01"))
+			.andExpect(jsonPath("$.page.size").value(20))
 			.andExpect(jsonPath("$.page.hasMore").value(true))
 			.andReturn();
 		Matcher cursorMatch = Pattern.compile("\\\"nextCursor\\\":\\\"([^\\\"]+)\\\"")
@@ -200,10 +201,33 @@ class DailyChartControllerTests {
 				.param("date", yesterday.toString())
 				.param("cursor", cursorMatch.group(1)))
 			.andExpect(status().isOk())
-			.andExpect(jsonPath("$.items.length()").value(1))
+			.andExpect(jsonPath("$.items.length()").value(30))
 			.andExpect(jsonPath("$.items[0].rank").value(21))
-			.andExpect(jsonPath("$.items[0].track.title").value("Past Track 21"))
+			.andExpect(jsonPath("$.items[29].rank").value(50))
+			.andExpect(jsonPath("$.items[29].track.title").value("Past Track 50"))
+			.andExpect(jsonPath("$.page.size").value(30))
 			.andExpect(jsonPath("$.page.hasMore").value(false));
+
+		assertThat(jdbcClient.sql("""
+				SELECT COUNT(*)
+				FROM daily_rankings
+				WHERE ranking_date = :rankingDate
+				  AND scope_type = 'ALL'
+				""")
+			.param("rankingDate", yesterday)
+			.query(Integer.class)
+			.single()).isEqualTo(50);
+		assertThat(jdbcClient.sql("""
+				SELECT COUNT(*)
+				FROM daily_rankings
+				WHERE ranking_date = :rankingDate
+				  AND scope_type = 'GENRE'
+				  AND genre_id = :genreId
+				""")
+			.param("rankingDate", yesterday)
+			.param("genreId", rock)
+			.query(Integer.class)
+			.single()).isEqualTo(50);
 	}
 
 	@Test

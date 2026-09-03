@@ -13,7 +13,7 @@ class DailyRankingSchedulerTests {
 	@Test
 	void finalizesThePreviousKoreanServiceDate() {
 		DailyRankingService rankingService = mock(DailyRankingService.class);
-		Clock clock = Clock.fixed(Instant.parse("2026-09-01T15:05:00Z"), ZoneOffset.UTC);
+		Clock clock = Clock.fixed(Instant.parse("2026-09-01T15:00:00Z"), ZoneOffset.UTC);
 		DailyRankingScheduler scheduler = new DailyRankingScheduler(rankingService, clock);
 
 		scheduler.finalizeYesterday();

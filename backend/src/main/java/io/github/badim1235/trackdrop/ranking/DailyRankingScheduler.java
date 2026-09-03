@@ -21,7 +21,7 @@ class DailyRankingScheduler {
 		this.clock = clock;
 	}
 
-	@Scheduled(cron = "${trackdrop.ranking.cron:0 5 0 * * *}", zone = "Asia/Seoul")
+	@Scheduled(cron = "${trackdrop.ranking.cron:0 0 0 * * *}", zone = "Asia/Seoul")
 	void finalizeYesterday() {
 		LocalDate targetDate = LocalDate.ofInstant(clock.instant(), SERVICE_ZONE).minusDays(1);
 		boolean created = rankingService.snapshot(targetDate);

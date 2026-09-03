@@ -225,7 +225,7 @@ describe('TrackPick app shell', () => {
           date: '2026-08-31',
           status: 'FINAL',
           scope: { type: 'ALL', genre: null },
-          asOf: '2026-09-01T15:05:00Z',
+          asOf: '2026-09-01T15:00:00Z',
           items: [{
             rank: 1,
             voteCount: 7,
@@ -245,7 +245,7 @@ describe('TrackPick app shell', () => {
               externalUrl: null,
             },
           }],
-          page: { size: 20, hasMore: false, nextCursor: null },
+          page: { size: 20, hasMore: true, nextCursor: 'final-page-2' },
           quota: null,
           actions: { canVote: false },
         })
@@ -257,7 +257,11 @@ describe('TrackPick app shell', () => {
     expect(await screen.findByRole('heading', { name: '2026년 8월 31일 차트' })).toBeInTheDocument()
     expect(screen.getByLabelText('차트 날짜')).toHaveValue('2026-08-31')
     expect(await screen.findByText('지난 여름의 노래')).toBeInTheDocument()
-    expect(screen.getByText(/FINAL · 00:05 확정/)).toBeInTheDocument()
+    expect(screen.getByText('DAILY CHART')).toBeInTheDocument()
+    expect(screen.queryByText(/FINAL/)).not.toBeInTheDocument()
+    expect(screen.getByText('과거 차트 보기')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '오늘 차트' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '더보기 (30곡)' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '추천' })).not.toBeInTheDocument()
   })
 

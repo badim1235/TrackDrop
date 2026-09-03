@@ -107,7 +107,8 @@ class HomeService {
 		JOIN genres genre ON genre.id = recommendation.primary_genre_id
 		JOIN track_provider_refs provider_ref
 		  ON provider_ref.track_id = track.id AND provider_ref.provider = 'APPLE_MUSIC'
-		WHERE recommendation.created_at <= :asOf
+		WHERE recommendation.created_at >= :dayStart
+		  AND recommendation.created_at <= :asOf
 		  AND (
 			:firstPage = TRUE
 			OR recommendation.created_at < :afterCreatedAt
@@ -203,6 +204,7 @@ class HomeService {
 	) {
 		return jdbcClient.sql(RECENT_SQL)
 			.param("today", today)
+			.param("dayStart", today.atStartOfDay(SERVICE_ZONE).toOffsetDateTime())
 			.param("asOf", OffsetDateTime.ofInstant(state.asOf(), ZoneOffset.UTC))
 			.param("viewerId", viewerId)
 			.param("firstPage", state.firstPage())

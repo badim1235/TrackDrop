@@ -292,22 +292,27 @@
 
 .chartFilters {
   display: flex;
-  justify-content: flex-end;
-  padding-bottom: 12px;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  padding-bottom: 16px;
 }
 
 .chartDatePicker {
-  min-height: 38px;
+  min-height: 42px;
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 0 10px;
+  padding: 0 12px;
   border: 1px solid var(--line-strong);
   border-radius: 6px;
-  color: var(--muted);
+  color: var(--ink);
   background: var(--paper);
-  font-size: 12px;
+  font-size: 13px;
+  font-weight: 600;
 }
+
+.activeChartDatePicker { border-color: var(--ink); }
 
 .chartDatePicker:focus-within {
   border-color: var(--ink);
@@ -327,6 +332,23 @@
   font-weight: 600;
   color-scheme: light;
 }
+
+.todayChartButton {
+  min-height: 42px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  color: var(--ink);
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.todayChartButton:hover { background: var(--paper); }
 
 .genreTabs {
   display: flex;
@@ -1018,8 +1040,8 @@ a.loginNotice:hover { color: var(--ink); text-decoration: underline; text-underl
   .homeTrackItem { grid-template-columns: 76px minmax(0, 1fr); gap: 12px; }
   .homeArtwork, .homeArtworkFallback { width: 76px; height: 76px; }
   .recentFeed .homeTrackItem:nth-child(2) { border-top: 1px solid var(--line); }
-  .chartFilters { justify-content: stretch; }
-  .chartDatePicker { width: 100%; }
+  .chartFilters { align-items: stretch; }
+  .chartDatePicker { min-width: 0; flex: 1; }
   .chartDatePicker input { margin-left: auto; }
   .chartColumns { grid-template-columns: 44px 1fr 76px; padding: 0 10px; }
   .chartRow { grid-template-columns: 38px 56px minmax(0, 1fr); gap: 10px; padding: 13px 8px; }

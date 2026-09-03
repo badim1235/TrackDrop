@@ -259,7 +259,7 @@ Spring annotation에서 spec을 생성하는 code-first 방식은 backend 구현
 ## 10. Daily Ranking Scheduler
 
 - Spring `@Scheduled`를 사용한다.
-- `Asia/Seoul` 기준 매일 00:05에 전날 날짜를 인자로 application service를 호출한다.
+- `Asia/Seoul` 기준 매일 00:00에 전날 날짜를 인자로 application service를 호출한다.
 - scheduler는 먼저 `ranking_runs`에 대상 날짜를 원자적으로 claim하며 실패하거나 장시간 멈춘 run은 같은 application service로 재시도한다.
 - claim한 instance만 전체 및 장르별 snapshot을 계산한다.
 - 완료 전 snapshot은 공개하지 않고 `COMPLETED` 상태에서만 `FINAL`로 조회한다.

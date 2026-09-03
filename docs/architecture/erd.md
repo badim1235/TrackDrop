@@ -498,7 +498,7 @@ PK와 Unique Constraint가 만드는 인덱스 외에 다음 인덱스를 권장
 | `recommendations(primary_genre_id, track_id)` | 장르별 Vote 집계 join |
 | `recommendations(created_at DESC, id DESC)` | 홈과 최근 등록 목록 |
 | `tracks(isrc)` | ISRC 후보 검색. null과 중복 허용 |
-| `daily_rankings(ranking_date, scope_type, genre_id, rank)` | 과거 Top 20과 더 보기 |
+| `daily_rankings(ranking_date, scope_type, genre_id, rank)` | 과거 Top 50의 20곡 + 30곡 더 보기 |
 | `content_reports(status, created_at)` | 향후 운영 검토 queue |
 
 오늘 추천 상위 홈은 `votes(voted_on, track_id)` 집계를 사용한다. 초기에는 별도 counter나 Redis 없이 시작하고, 실제 조회 부하가 확인되면 cache를 추가한다.
@@ -610,6 +610,7 @@ run 상태 전환은 다음 경계를 사용한다.
 
 ### 최근 등록된 노래
 
+- KST 현재 날짜에 생성된 Recommendation만 조회
 - `recommendations.created_at DESC, recommendation.id DESC` 정렬
 - 순위 번호 없음
 - 전체보기는 최근 등록 목록으로 이동

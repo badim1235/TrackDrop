@@ -1,5 +1,5 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { CalendarDays, Check, Disc3, ExternalLink, LoaderCircle, ThumbsUp } from 'lucide-react'
+import { ArrowLeft, CalendarDays, Check, Disc3, ExternalLink, LoaderCircle, ThumbsUp } from 'lucide-react'
 import { useState } from 'react'
 import { useSearchParams } from 'react-router'
 import styles from '../App.module.css'
@@ -134,16 +134,14 @@ export function ChartPage() {
   return (
     <div className={styles.pageStack}>
       <header className={styles.pageHeader}>
-        <p className={styles.eyebrow}>{isFinal ? 'FINAL CHART' : 'DAILY CHART'}</p>
+        <p className={styles.eyebrow}>DAILY CHART</p>
         <h1>{isFinal ? `${formatChartDate(selectedDate)} 차트` : '오늘의 차트'}</h1>
-        <p>{firstPage
-          ? `${firstPage.status} · ${formatAsOf(firstPage.asOf)} ${firstPage.status === 'FINAL' ? '확정' : '기준'}`
-          : isFinal ? '확정된 일일 추천 순위' : '실시간 추천 순위'}</p>
+        {!isFinal ? <p>{firstPage ? `LIVE · ${formatAsOf(firstPage.asOf)} 기준` : '실시간 추천 순위'}</p> : null}
       </header>
       <div className={styles.chartFilters}>
-        <label className={styles.chartDatePicker}>
+        <label className={`${styles.chartDatePicker} ${isFinal ? styles.activeChartDatePicker : ''}`}>
           <CalendarDays aria-hidden="true" size={16} />
-          <span>차트 날짜</span>
+          <span>과거 차트 보기</span>
           <input
             aria-label="차트 날짜"
             type="date"
@@ -152,6 +150,11 @@ export function ChartPage() {
             onChange={(event) => selectDate(event.target.value)}
           />
         </label>
+        {isFinal ? (
+          <button className={styles.todayChartButton} type="button" onClick={() => selectDate(today)}>
+            <ArrowLeft aria-hidden="true" size={15} /> 오늘 차트
+          </button>
+        ) : null}
       </div>
       <div className={styles.genreTabs} role="tablist" aria-label="장르">
         <button
@@ -254,7 +257,7 @@ export function ChartPage() {
             disabled={chart.isFetchingNextPage}
             onClick={() => chart.fetchNextPage()}
           >
-            {chart.isFetchingNextPage ? '불러오는 중...' : '더보기 (20곡)'}
+            {chart.isFetchingNextPage ? '불러오는 중...' : `더보기 (${isFinal ? 30 : 20}곡)`}
           </button>
         ) : null}
       </section>

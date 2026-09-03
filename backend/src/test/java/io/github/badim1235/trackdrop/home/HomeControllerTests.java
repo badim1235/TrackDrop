@@ -104,6 +104,27 @@ class HomeControllerTests {
 	}
 
 	@Test
+	void onlyReturnsTracksRegisteredOnTheCurrentKoreanDate() throws Exception {
+		UUID user = createUsers(1).getFirst();
+		UUID rock = genreId("rock");
+		OffsetDateTime todayStart = LocalDate.now(SERVICE_ZONE)
+			.atStartOfDay(SERVICE_ZONE)
+			.toOffsetDateTime();
+		insertTrack("어제 등록곡", todayStart.minusSeconds(1), rock, user, List.of(user));
+		insertTrack("오늘 등록곡", todayStart, rock, user, List.of(user));
+
+		mockMvc.perform(get("/api/v1/home"))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.recent.items.length()").value(1))
+			.andExpect(jsonPath("$.recent.items[0].title").value("오늘 등록곡"));
+
+		mockMvc.perform(get("/api/v1/tracks/recent"))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.items.length()").value(1))
+			.andExpect(jsonPath("$.items[0].title").value("오늘 등록곡"));
+	}
+
+	@Test
 	void rejectsAnInvalidRecentCursor() throws Exception {
 		mockMvc.perform(get("/api/v1/tracks/recent").param("cursor", "not-a-cursor"))
 			.andExpect(status().isBadRequest())

@@ -43,7 +43,7 @@ TrackDrop MVP의 화면과 도메인 명령을 HTTP API 계약으로 정의한�
 | Vote | `POST /tracks/{trackId}/votes`로 오늘의 지지 생성 |
 | 일일 권한 | 쓰기 성공 응답에 `limit`, `used`, `remaining`, `resetAt` 포함 |
 | Chart | 오늘은 `LIVE`, 과거 완료 snapshot은 `FINAL`, batch 처리 중은 `PROCESSING` |
-| Pagination | 기본 20개, opaque cursor 사용 |
+| Pagination | 기본 20개, 과거 차트의 두 번째 페이지는 30개, opaque cursor 사용 |
 | Ranking | `ROW_NUMBER`: Vote 수 내림차순, Track 이름 오름차순, 아티스트명, Track ID |
 | Music provider | MVP adapter는 Apple iTunes Search API이며 Apple 공식 30초 preview만 사용 |
 | 오류 | 안정적인 domain error code와 사용자용 message, 추적용 `traceId` |
@@ -792,7 +792,8 @@ ROW_NUMBER(
 과거 차트:
 
 - 완료 snapshot이면 `status=FINAL`
-- 저장된 `daily_rankings.rank` 순서 사용
+- 전체·장르별 Top 50만 저장하고 `daily_rankings.rank` 순서 사용
+- 첫 응답은 20곡, 더 보기 응답은 나머지 30곡
 - `actions.canVote=false`
 - Vote와 Recommendation URL을 제공하지 않음
 
