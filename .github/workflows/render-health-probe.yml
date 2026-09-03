@@ -2,7 +2,7 @@ name: Render Health Probe
 
 on:
   schedule:
-    - cron: "3-58/5 * * * *"
+    - cron: "*/5 * * * *"
   workflow_dispatch:
 
 permissions:
@@ -31,6 +31,7 @@ jobs:
             --silent \
             --show-error \
             --location \
+            --header "User-Agent: TrackPick-Render-Keep-Alive/1.0" \
             --connect-timeout 10 \
             --max-time 120 \
             --retry 2 \
