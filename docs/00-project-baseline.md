@@ -1,4 +1,4 @@
-# TrackDrop MVP Project Baseline
+# TrackPick MVP Project Baseline
 
 > 상태: **Accepted**
 >
@@ -8,7 +8,7 @@
 
 ## 1. 제품 정의
 
-TrackDrop은 익명 계정 사용자들이 자신이 좋아하는 음악을 소개하고, 다른 사용자들이 하루에 제한된 표로 지지하여 전체 및 장르별 Daily Chart를 만드는 커뮤니티 기반 Music Discovery Platform이다.
+TrackPick은 익명 계정 사용자들이 자신이 좋아하는 음악을 소개하고, 다른 사용자들이 하루에 제한된 표로 지지하여 전체 및 장르별 Daily Chart를 만드는 커뮤니티 기반 Music Discovery Platform이다.
 
 핵심 질문은 다음과 같다.
 
@@ -20,7 +20,7 @@ TrackDrop은 익명 계정 사용자들이 자신이 좋아하는 음악을 소�
 
 | 영역 | 기준 정책 |
 | --- | --- |
-| 서비스명 | `TrackDrop` |
+| 서비스명 | `TrackPick` |
 | 계정 | Supabase Auth 기반 이메일·비밀번호 로그인을 사용한다. 비밀번호는 8~16자이며 공백 없이 영문자와 숫자를 각각 하나 이상 포함하고 특수문자는 선택이다. |
 | 공개 Identity | 이메일은 공개하지 않는다. 검수된 앞 단어 50개, 뒤 명사 50개와 숫자 네 자리를 붙여 자동 생성한 고유 익명 닉네임만 노출하며 지정된 어색한 조합 6개는 제외한다. |
 | 계정 복구 | 가입 시 이메일 확인을 요구하고 Supabase Auth의 이메일 기반 비밀번호 재설정을 사용한다. 이메일이 로그인 ID이므로 별도 ID 찾기는 제공하지 않는다. |

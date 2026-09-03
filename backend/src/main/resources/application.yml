@@ -32,6 +32,8 @@ server:
         secure: ${SESSION_COOKIE_SECURE:false}
 
 trackdrop:
+  ranking:
+    cron: "${RANKING_SNAPSHOT_CRON:0 5 0 * * *}"
   security:
     ip-hash-secret: ${IP_HASH_SECRET:trackdrop-local-development-secret}
     remember-me-seconds: 604800

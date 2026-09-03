@@ -9,9 +9,12 @@ import io.github.badim1235.trackdrop.chart.DailyChartResponse.Preview;
 import io.github.badim1235.trackdrop.chart.DailyChartResponse.Scope;
 import io.github.badim1235.trackdrop.chart.DailyChartResponse.Status;
 import io.github.badim1235.trackdrop.chart.DailyChartResponse.Track;
+import io.github.badim1235.trackdrop.ranking.DailyRankingService;
 import io.github.badim1235.trackdrop.shared.quota.DailyQuotaService;
 import io.github.badim1235.trackdrop.shared.quota.DailyQuotaSnapshot;
 import java.nio.charset.StandardCharsets;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -23,6 +26,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -32,6 +36,7 @@ class DailyChartService {
 	private static final ZoneId SERVICE_ZONE = ZoneId.of("Asia/Seoul");
 	private static final int PAGE_SIZE = 20;
 	private static final UUID EMPTY_UUID = new UUID(0, 0);
+	private static final RowMapper<Item> ITEM_ROW_MAPPER = DailyChartService::mapItem;
 	private static final String LIVE_CHART_SQL = """
 		WITH ranked AS (
 			SELECT
@@ -90,14 +95,56 @@ class DailyChartService {
 		ORDER BY ranked.rank
 		LIMIT :queryLimit
 		""";
+	private static final String FINAL_CHART_SQL = """
+		SELECT
+			daily_ranking.rank,
+			daily_ranking.vote_count,
+			FALSE AS has_voted_today,
+			track.id,
+			track.title,
+			track.artist_name,
+			track.album_name,
+			track.album_cover_url,
+			track.release_year,
+			track.explicit,
+			genre.id AS genre_id,
+			genre.code AS genre_code,
+			genre.display_name AS genre_display_name,
+			genre.sort_order AS genre_sort_order,
+			CASE WHEN recommendation.comment_visibility = 'VISIBLE' THEN recommendation.comment END AS comment,
+			CASE WHEN recommendation.comment_visibility = 'VISIBLE' THEN recommender.public_nickname END AS recommender_nickname,
+			provider_ref.preview_url,
+			provider_ref.external_url
+		FROM daily_rankings daily_ranking
+		JOIN tracks track ON track.id = daily_ranking.track_id
+		JOIN recommendations recommendation ON recommendation.track_id = track.id
+		JOIN users recommender ON recommender.id = recommendation.recommender_user_id
+		JOIN genres genre ON genre.id = recommendation.primary_genre_id
+		JOIN track_provider_refs provider_ref
+		  ON provider_ref.track_id = track.id AND provider_ref.provider = 'APPLE_MUSIC'
+		WHERE daily_ranking.ranking_run_id = :runId
+		  AND daily_ranking.ranking_date = :chartDate
+		  AND daily_ranking.scope_type = :scopeType
+		  AND (:allGenres = TRUE OR daily_ranking.genre_id = :genreId)
+		  AND daily_ranking.rank > :afterRank
+		ORDER BY daily_ranking.rank
+		LIMIT :queryLimit
+		""";
 
 	private final JdbcClient jdbcClient;
 	private final DailyQuotaService quotaService;
+	private final DailyRankingService rankingService;
 	private final Clock clock;
 
-	DailyChartService(JdbcClient jdbcClient, DailyQuotaService quotaService, Clock clock) {
+	DailyChartService(
+		JdbcClient jdbcClient,
+		DailyQuotaService quotaService,
+		DailyRankingService rankingService,
+		Clock clock
+	) {
 		this.jdbcClient = jdbcClient;
 		this.quotaService = quotaService;
+		this.rankingService = rankingService;
 		this.clock = clock;
 	}
 
@@ -109,16 +156,29 @@ class DailyChartService {
 		if (chartDate.isAfter(today)) {
 			throw DailyChartException.futureDate();
 		}
-		if (chartDate.isBefore(today)) {
-			throw DailyChartException.rankingNotAvailable();
-		}
 
+		boolean finalChart = chartDate.isBefore(today);
 		String genreCode = normalizeGenre(requestedGenre);
-		Optional<Genre> genre = "all".equals(genreCode) ? Optional.empty() : activeGenre(genreCode);
+		Optional<Genre> genre = "all".equals(genreCode)
+			? Optional.empty()
+			: findGenre(genreCode, finalChart);
 		if (!"all".equals(genreCode) && genre.isEmpty()) {
 			throw DailyChartException.genreNotFound();
 		}
 
+		return finalChart
+			? getFinal(chartDate, genreCode, genre, cursor, now)
+			: getLive(chartDate, genreCode, genre, cursor, viewerId, now);
+	}
+
+	private DailyChartResponse getLive(
+		LocalDate chartDate,
+		String genreCode,
+		Optional<Genre> genre,
+		String cursor,
+		UUID viewerId,
+		Instant now
+	) {
 		CursorState cursorState = cursor == null || cursor.isBlank()
 			? new CursorState(chartDate, genreCode, now, 0)
 			: decodeCursor(cursor, chartDate, genreCode, now);
@@ -133,63 +193,124 @@ class DailyChartService {
 			.param("viewerId", selectedViewerId)
 			.param("afterRank", cursorState.afterRank())
 			.param("queryLimit", PAGE_SIZE + 1)
-			.query((row, rowNumber) -> new Item(
-				row.getLong("rank"),
-				row.getInt("vote_count"),
-				row.getBoolean("has_voted_today"),
-				new Track(
-					row.getObject("id", UUID.class),
-					row.getString("title"),
-					row.getString("artist_name"),
-					row.getString("album_name"),
-					row.getString("album_cover_url"),
-					row.getObject("release_year") == null ? null : row.getInt("release_year"),
-					row.getBoolean("explicit"),
-					new Genre(
-						row.getObject("genre_id", UUID.class),
-						row.getString("genre_code"),
-						row.getString("genre_display_name"),
-						row.getInt("genre_sort_order")),
-					row.getString("comment"),
-					row.getString("recommender_nickname"),
-					new Preview(
-						row.getString("preview_url") != null,
-						MusicProvider.APPLE_MUSIC,
-						row.getString("preview_url")),
-					row.getString("external_url"))))
+			.query(ITEM_ROW_MAPPER)
 			.list();
 
+		DailyQuotaSnapshot quota = viewerId == null ? null : quotaService.current(viewerId);
+		return response(chartDate, Status.LIVE, genre, cursorState, queriedItems, quota, true);
+	}
+
+	private DailyChartResponse getFinal(
+		LocalDate chartDate,
+		String genreCode,
+		Optional<Genre> genre,
+		String cursor,
+		Instant now
+	) {
+		rankingService.snapshot(chartDate);
+		FinalizedRun run = findFinalizedRun(chartDate).orElseThrow(DailyChartException::rankingNotAvailable);
+		CursorState cursorState = cursor == null || cursor.isBlank()
+			? new CursorState(chartDate, genreCode, run.completedAt(), 0)
+			: decodeCursor(cursor, chartDate, genreCode, now);
+		if (cursorState.asOf().toEpochMilli() != run.completedAt().toEpochMilli()) {
+			throw DailyChartException.invalidCursor(new IllegalArgumentException("Snapshot cursor is stale"));
+		}
+
+		UUID selectedGenreId = genre.map(Genre::id).orElse(EMPTY_UUID);
+		List<Item> queriedItems = jdbcClient.sql(FINAL_CHART_SQL)
+			.param("runId", run.id())
+			.param("chartDate", chartDate)
+			.param("scopeType", genre.isEmpty() ? "ALL" : "GENRE")
+			.param("allGenres", genre.isEmpty())
+			.param("genreId", selectedGenreId)
+			.param("afterRank", cursorState.afterRank())
+			.param("queryLimit", PAGE_SIZE + 1)
+			.query(ITEM_ROW_MAPPER)
+			.list();
+
+		return response(chartDate, Status.FINAL, genre, cursorState, queriedItems, null, false);
+	}
+
+	private static DailyChartResponse response(
+		LocalDate chartDate,
+		Status status,
+		Optional<Genre> genre,
+		CursorState cursorState,
+		List<Item> queriedItems,
+		DailyQuotaSnapshot quota,
+		boolean canVote
+	) {
 		boolean hasMore = queriedItems.size() > PAGE_SIZE;
 		List<Item> items = hasMore ? List.copyOf(queriedItems.subList(0, PAGE_SIZE)) : queriedItems;
 		String nextCursor = hasMore
-			? encodeCursor(new CursorState(chartDate, genreCode, cursorState.asOf(), items.getLast().rank()))
+			? encodeCursor(new CursorState(chartDate, cursorState.genreCode(), cursorState.asOf(), items.getLast().rank()))
 			: null;
-		DailyQuotaSnapshot quota = viewerId == null ? null : quotaService.current(viewerId);
 
 		return new DailyChartResponse(
 			chartDate,
-			Status.LIVE,
+			status,
 			new Scope(genre.isPresent() ? "GENRE" : "ALL", genre.orElse(null)),
 			cursorState.asOf(),
 			items,
 			new Page(PAGE_SIZE, hasMore, nextCursor),
 			quota,
-			new Actions(true));
+			new Actions(canVote));
 	}
 
-	private Optional<Genre> activeGenre(String code) {
+	private Optional<FinalizedRun> findFinalizedRun(LocalDate rankingDate) {
+		return jdbcClient.sql("""
+				SELECT id, completed_at
+				FROM ranking_runs
+				WHERE ranking_date = :rankingDate
+				  AND status = 'COMPLETED'
+				""")
+			.param("rankingDate", rankingDate)
+			.query((row, rowNumber) -> new FinalizedRun(
+				row.getObject("id", UUID.class),
+				row.getObject("completed_at", OffsetDateTime.class).toInstant()))
+			.optional();
+	}
+
+	private Optional<Genre> findGenre(String code, boolean includeInactive) {
 		return jdbcClient.sql("""
 				SELECT id, code, display_name, sort_order
 				FROM genres
-				WHERE code = :code AND active = TRUE
+				WHERE code = :code
+				  AND (:includeInactive = TRUE OR active = TRUE)
 				""")
 			.param("code", code)
+			.param("includeInactive", includeInactive)
 			.query((row, rowNumber) -> new Genre(
 				row.getObject("id", UUID.class),
 				row.getString("code"),
 				row.getString("display_name"),
 				row.getInt("sort_order")))
 			.optional();
+	}
+
+	private static Item mapItem(ResultSet row, int rowNumber) throws SQLException {
+		String previewUrl = row.getString("preview_url");
+		return new Item(
+			row.getLong("rank"),
+			row.getInt("vote_count"),
+			row.getBoolean("has_voted_today"),
+			new Track(
+				row.getObject("id", UUID.class),
+				row.getString("title"),
+				row.getString("artist_name"),
+				row.getString("album_name"),
+				row.getString("album_cover_url"),
+				row.getObject("release_year") == null ? null : row.getInt("release_year"),
+				row.getBoolean("explicit"),
+				new Genre(
+					row.getObject("genre_id", UUID.class),
+					row.getString("genre_code"),
+					row.getString("genre_display_name"),
+					row.getInt("genre_sort_order")),
+				row.getString("comment"),
+				row.getString("recommender_nickname"),
+				new Preview(previewUrl != null, MusicProvider.APPLE_MUSIC, previewUrl),
+				row.getString("external_url")));
 	}
 
 	private static String normalizeGenre(String genre) {
@@ -236,5 +357,8 @@ class DailyChartService {
 	}
 
 	private record CursorState(LocalDate date, String genreCode, Instant asOf, long afterRank) {
+	}
+
+	private record FinalizedRun(UUID id, Instant completedAt) {
 	}
 }

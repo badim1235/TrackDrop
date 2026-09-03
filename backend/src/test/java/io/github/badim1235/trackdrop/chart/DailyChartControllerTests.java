@@ -1,10 +1,12 @@
 package io.github.badim1235.trackdrop.chart;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import io.github.badim1235.trackdrop.TestcontainersConfiguration;
+import io.github.badim1235.trackdrop.ranking.DailyRankingService;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
@@ -15,6 +17,7 @@ import java.util.List;
 import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -23,12 +26,10 @@ import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
-import org.springframework.transaction.annotation.Transactional;
 
 @Import(TestcontainersConfiguration.class)
 @SpringBootTest
 @AutoConfigureMockMvc
-@Transactional
 class DailyChartControllerTests {
 	private static final ZoneId SERVICE_ZONE = ZoneId.of("Asia/Seoul");
 
@@ -37,6 +38,22 @@ class DailyChartControllerTests {
 
 	@Autowired
 	private JdbcClient jdbcClient;
+
+	@Autowired
+	private DailyRankingService rankingService;
+
+	@BeforeEach
+	void clearChartData() {
+		jdbcClient.sql("DELETE FROM daily_rankings").update();
+		jdbcClient.sql("DELETE FROM ranking_runs").update();
+		jdbcClient.sql("DELETE FROM daily_recommendation_quotas").update();
+		jdbcClient.sql("DELETE FROM votes").update();
+		jdbcClient.sql("DELETE FROM recommendations").update();
+		jdbcClient.sql("DELETE FROM track_genres").update();
+		jdbcClient.sql("DELETE FROM track_provider_refs").update();
+		jdbcClient.sql("DELETE FROM tracks").update();
+		jdbcClient.sql("DELETE FROM users").update();
+	}
 
 	@Test
 	void returnsLiveChartRankedByVotesThenCaseInsensitiveTitle() throws Exception {
@@ -100,6 +117,104 @@ class DailyChartControllerTests {
 			.andExpect(jsonPath("$.error.code").value("GENRE_NOT_FOUND"));
 	}
 
+	@Test
+	void createsAndReturnsAnImmutableFinalChartForAPastDate() throws Exception {
+		List<UUID> users = createUsers(4);
+		UUID rock = genreId("rock");
+		LocalDate yesterday = LocalDate.now(SERVICE_ZONE).minusDays(1);
+		UUID beta = insertTrack("Beta", "Artist", rock, users.getFirst(), users.subList(0, 2), yesterday);
+		UUID alpha = insertTrack("alpha", "Artist", rock, users.getFirst(), users.subList(0, 1), yesterday);
+
+		mockMvc.perform(get("/api/v1/charts/daily")
+				.param("date", yesterday.toString())
+				.param("genre", "rock"))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.date").value(yesterday.toString()))
+			.andExpect(jsonPath("$.status").value("FINAL"))
+			.andExpect(jsonPath("$.scope.type").value("GENRE"))
+			.andExpect(jsonPath("$.items[0].rank").value(1))
+			.andExpect(jsonPath("$.items[0].voteCount").value(2))
+			.andExpect(jsonPath("$.items[0].track.title").value("Beta"))
+			.andExpect(jsonPath("$.items[0].hasVotedToday").value(false))
+			.andExpect(jsonPath("$.quota").doesNotExist())
+			.andExpect(jsonPath("$.actions.canVote").value(false));
+
+		insertVote(users.get(2), alpha, yesterday);
+		insertVote(users.get(3), alpha, yesterday);
+
+		mockMvc.perform(get("/api/v1/charts/daily")
+				.param("date", yesterday.toString())
+				.param("genre", "rock"))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.items[0].track.id").value(beta.toString()))
+			.andExpect(jsonPath("$.items[0].voteCount").value(2))
+			.andExpect(jsonPath("$.items[1].track.id").value(alpha.toString()))
+			.andExpect(jsonPath("$.items[1].voteCount").value(1));
+
+		assertThat(jdbcClient.sql("""
+				SELECT attempt_count
+				FROM ranking_runs
+				WHERE ranking_date = :rankingDate
+				""")
+			.param("rankingDate", yesterday)
+			.query(Integer.class)
+			.single()).isEqualTo(1);
+	}
+
+	@Test
+	void returnsAnEmptyFinalChartWhenThePastDateHasNoVotes() throws Exception {
+		LocalDate yesterday = LocalDate.now(SERVICE_ZONE).minusDays(1);
+
+		mockMvc.perform(get("/api/v1/charts/daily").param("date", yesterday.toString()))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.status").value("FINAL"))
+			.andExpect(jsonPath("$.items.length()").value(0))
+			.andExpect(jsonPath("$.page.hasMore").value(false))
+			.andExpect(jsonPath("$.actions.canVote").value(false));
+
+		assertThat(rankingService.snapshot(yesterday)).isFalse();
+	}
+
+	@Test
+	void paginatesACompletedFinalChartByStoredRank() throws Exception {
+		UUID user = createUsers(1).getFirst();
+		UUID rock = genreId("rock");
+		LocalDate yesterday = LocalDate.now(SERVICE_ZONE).minusDays(1);
+		for (int index = 1; index <= 21; index++) {
+			insertTrack("Past Track %02d".formatted(index), "Artist", rock, user, List.of(user), yesterday);
+		}
+
+		MvcResult firstPage = mockMvc.perform(get("/api/v1/charts/daily")
+				.param("date", yesterday.toString()))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.status").value("FINAL"))
+			.andExpect(jsonPath("$.items.length()").value(20))
+			.andExpect(jsonPath("$.items[0].track.title").value("Past Track 01"))
+			.andExpect(jsonPath("$.page.hasMore").value(true))
+			.andReturn();
+		Matcher cursorMatch = Pattern.compile("\\\"nextCursor\\\":\\\"([^\\\"]+)\\\"")
+			.matcher(firstPage.getResponse().getContentAsString(StandardCharsets.UTF_8));
+		assertThat(cursorMatch.find()).isTrue();
+
+		mockMvc.perform(get("/api/v1/charts/daily")
+				.param("date", yesterday.toString())
+				.param("cursor", cursorMatch.group(1)))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.items.length()").value(1))
+			.andExpect(jsonPath("$.items[0].rank").value(21))
+			.andExpect(jsonPath("$.items[0].track.title").value("Past Track 21"))
+			.andExpect(jsonPath("$.page.hasMore").value(false));
+	}
+
+	@Test
+	void rejectsAFutureChartDate() throws Exception {
+		LocalDate tomorrow = LocalDate.now(SERVICE_ZONE).plusDays(1);
+
+		mockMvc.perform(get("/api/v1/charts/daily").param("date", tomorrow.toString()))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.error.code").value("FUTURE_DATE_NOT_ALLOWED"));
+	}
+
 	private List<UUID> createUsers(int count) {
 		List<UUID> users = new ArrayList<>();
 		OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC).minusMinutes(2);
@@ -139,6 +254,23 @@ class DailyChartControllerTests {
 		UUID genreId,
 		UUID recommenderId,
 		List<UUID> voterIds
+	) {
+		return insertTrack(
+			title,
+			artist,
+			genreId,
+			recommenderId,
+			voterIds,
+			LocalDate.now(SERVICE_ZONE));
+	}
+
+	private UUID insertTrack(
+		String title,
+		String artist,
+		UUID genreId,
+		UUID recommenderId,
+		List<UUID> voterIds,
+		LocalDate votedOn
 	) {
 		UUID trackId = UUID.randomUUID();
 		UUID recommendationId = UUID.randomUUID();
@@ -197,19 +329,22 @@ class DailyChartControllerTests {
 			.param("genreId", genreId)
 			.param("now", now)
 			.update();
-		LocalDate today = LocalDate.now(SERVICE_ZONE);
 		for (UUID voterId : voterIds) {
-			jdbcClient.sql("""
-					INSERT INTO votes (id, user_id, track_id, voted_on, created_at)
-					VALUES (:id, :userId, :trackId, :today, :now)
-					""")
-				.param("id", UUID.randomUUID())
-				.param("userId", voterId)
-				.param("trackId", trackId)
-				.param("today", today)
-				.param("now", now)
-				.update();
+			insertVote(voterId, trackId, votedOn);
 		}
 		return trackId;
+	}
+
+	private void insertVote(UUID userId, UUID trackId, LocalDate votedOn) {
+		jdbcClient.sql("""
+				INSERT INTO votes (id, user_id, track_id, voted_on, created_at)
+				VALUES (:id, :userId, :trackId, :votedOn, :now)
+				""")
+			.param("id", UUID.randomUUID())
+			.param("userId", userId)
+			.param("trackId", trackId)
+			.param("votedOn", votedOn)
+			.param("now", OffsetDateTime.now(ZoneOffset.UTC).minusMinutes(1))
+			.update();
 	}
 }

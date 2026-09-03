@@ -1,3 +1,7 @@
+param(
+    [switch]$UseConfiguredDatabase
+)
+
 $ErrorActionPreference = "Stop"
 
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
@@ -23,8 +27,15 @@ foreach ($line in Get-Content -LiteralPath $environmentFile) {
     [Environment]::SetEnvironmentVariable($name, $value, "Process")
 }
 
-if ($env:POSTGRES_PASSWORD -eq "REPLACE_WITH_NEW_DATABASE_PASSWORD") {
-    throw "Replace POSTGRES_PASSWORD in .env before starting TrackDrop."
+if ($UseConfiguredDatabase) {
+    if ($env:POSTGRES_PASSWORD -eq "REPLACE_WITH_NEW_DATABASE_PASSWORD") {
+        throw "Replace POSTGRES_PASSWORD in .env before starting TrackPick."
+    }
+}
+else {
+    $env:DATABASE_URL = "jdbc:postgresql://localhost:5432/trackdrop"
+    $env:POSTGRES_USER = "trackdrop"
+    $env:POSTGRES_PASSWORD = "trackdrop"
 }
 
 Push-Location (Join-Path $repositoryRoot "backend")

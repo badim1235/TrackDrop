@@ -135,8 +135,13 @@ export async function fetchRecentTracks(cursor?: string): Promise<RecentTracksRe
   return response.json() as Promise<RecentTracksResponse>
 }
 
-export async function fetchDailyChart(genre = 'all', cursor?: string): Promise<DailyChartResponse> {
+export async function fetchDailyChart(
+  genre = 'all',
+  date?: string,
+  cursor?: string,
+): Promise<DailyChartResponse> {
   const params = new URLSearchParams({ genre })
+  if (date) params.set('date', date)
   if (cursor) params.set('cursor', cursor)
   const response = await fetch(`/api/v1/charts/daily?${params}`, {
     credentials: 'include',

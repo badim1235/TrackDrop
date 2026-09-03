@@ -79,7 +79,7 @@ function App() {
         </Routes>
       </main>
 
-      <footer className={styles.footer}>TrackPick · 매일 00:00 KST 차트 갱신</footer>
+      <footer className={styles.footer}>TrackPick · 매일 00:05 KST 차트 확정</footer>
       <div className={styles.mobileNav}><Navigation /></div>
     </div>
   )

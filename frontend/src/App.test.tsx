@@ -16,7 +16,7 @@ function renderApp(initialEntry = '/') {
   )
 }
 
-describe('TrackDrop app shell', () => {
+describe('TrackPick app shell', () => {
   afterEach(() => {
     cleanup()
     vi.restoreAllMocks()
@@ -196,6 +196,69 @@ describe('TrackDrop app shell', () => {
       'src',
       'https://example.com/preview.m4a',
     )
+  })
+
+  it('renders a finalized historical chart without voting actions', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = String(input)
+      if (url === '/api/v1/me') {
+        return Response.json({
+          account: {
+            email: 'listener@example.com',
+            publicNickname: '새벽리듬4881',
+            emailVerified: true,
+            createdAt: '2026-08-01T00:00:00Z',
+          },
+          quota: {
+            date: '2026-09-03', limit: 4, used: 0, remaining: 4,
+            resetAt: '2026-09-03T15:00:00Z',
+          },
+        })
+      }
+      if (url === '/api/v1/genres') {
+        return Response.json({
+          items: [{ id: '10000000-0000-0000-0000-000000000020', code: 'rock', displayName: 'Rock', sortOrder: 200 }],
+        })
+      }
+      if (url === '/api/v1/charts/daily?genre=all&date=2026-08-31') {
+        return Response.json({
+          date: '2026-08-31',
+          status: 'FINAL',
+          scope: { type: 'ALL', genre: null },
+          asOf: '2026-09-01T15:05:00Z',
+          items: [{
+            rank: 1,
+            voteCount: 7,
+            hasVotedToday: false,
+            track: {
+              id: '20000000-0000-0000-0000-000000000031',
+              title: '지난 여름의 노래',
+              artistName: 'Historical Artist',
+              albumName: 'Archive',
+              albumCoverUrl: null,
+              releaseYear: 2026,
+              explicit: false,
+              primaryGenre: { id: '10000000-0000-0000-0000-000000000020', code: 'rock', displayName: 'Rock', sortOrder: 200 },
+              comment: '그날 가장 많이 추천받은 곡이에요.',
+              recommenderNickname: '푸른멜로디1934',
+              preview: { available: false, provider: 'APPLE_MUSIC', url: null },
+              externalUrl: null,
+            },
+          }],
+          page: { size: 20, hasMore: false, nextCursor: null },
+          quota: null,
+          actions: { canVote: false },
+        })
+      }
+      return new Response('', { status: 404 })
+    })
+    renderApp('/chart?date=2026-08-31')
+
+    expect(await screen.findByRole('heading', { name: '2026년 8월 31일 차트' })).toBeInTheDocument()
+    expect(screen.getByLabelText('차트 날짜')).toHaveValue('2026-08-31')
+    expect(await screen.findByText('지난 여름의 노래')).toBeInTheDocument()
+    expect(screen.getByText(/FINAL · 00:05 확정/)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '추천' })).not.toBeInTheDocument()
   })
 
   it('shows the login form with a persistent-login choice', () => {

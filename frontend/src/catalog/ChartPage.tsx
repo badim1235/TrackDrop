@@ -1,6 +1,7 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Check, Disc3, ExternalLink, LoaderCircle, ThumbsUp } from 'lucide-react'
+import { CalendarDays, Check, Disc3, ExternalLink, LoaderCircle, ThumbsUp } from 'lucide-react'
 import { useState } from 'react'
+import { useSearchParams } from 'react-router'
 import styles from '../App.module.css'
 import {
   ApiError,
@@ -43,10 +44,30 @@ function formatAsOf(value: string) {
   }).format(new Date(value))
 }
 
+function koreanDateValue(date = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    timeZone: 'Asia/Seoul',
+  }).formatToParts(date)
+  const value = Object.fromEntries(parts.map((part) => [part.type, part.value]))
+  return `${value.year}-${value.month}-${value.day}`
+}
+
+function formatChartDate(value: string) {
+  const [year, month, day] = value.split('-').map(Number)
+  return `${year}년 ${month}월 ${day}일`
+}
+
 export function ChartPage() {
   const queryClient = useQueryClient()
   const { data: account } = useAccount()
-  const [selectedGenre, setSelectedGenre] = useState('all')
+  const [searchParams, setSearchParams] = useSearchParams()
+  const today = koreanDateValue()
+  const requestedDate = searchParams.get('date') ?? undefined
+  const selectedDate = requestedDate ?? today
+  const selectedGenre = searchParams.get('genre') || 'all'
   const [voteError, setVoteError] = useState<string | null>(null)
   const genres = useQuery({
     queryKey: ['genres'],
@@ -54,8 +75,8 @@ export function ChartPage() {
     staleTime: 30 * 60 * 1000,
   })
   const chart = useInfiniteQuery({
-    queryKey: ['daily-chart', selectedGenre],
-    queryFn: ({ pageParam }) => fetchDailyChart(selectedGenre, pageParam ?? undefined),
+    queryKey: ['daily-chart', selectedDate, selectedGenre],
+    queryFn: ({ pageParam }) => fetchDailyChart(selectedGenre, requestedDate, pageParam ?? undefined),
     initialPageParam: null as string | null,
     getNextPageParam: (lastPage) => lastPage.page.nextCursor ?? undefined,
     staleTime: 15_000,
@@ -91,20 +112,53 @@ export function ChartPage() {
   const items = chart.data?.pages.flatMap((page) => page.items) ?? []
   const firstPage = chart.data?.pages[0]
   const quotaEmpty = account?.quota.remaining === 0
+  const isFinal = firstPage?.status === 'FINAL' || selectedDate < today
+  const canVote = firstPage?.actions.canVote ?? !isFinal
+
+  function selectDate(date: string) {
+    const next = new URLSearchParams(searchParams)
+    if (!date || date === today) next.delete('date')
+    else next.set('date', date)
+    setVoteError(null)
+    setSearchParams(next)
+  }
+
+  function selectGenre(genre: string) {
+    const next = new URLSearchParams(searchParams)
+    if (genre === 'all') next.delete('genre')
+    else next.set('genre', genre)
+    setVoteError(null)
+    setSearchParams(next)
+  }
 
   return (
     <div className={styles.pageStack}>
       <header className={styles.pageHeader}>
-        <p className={styles.eyebrow}>DAILY CHART</p>
-        <h1>오늘의 차트</h1>
-        <p>{firstPage ? `LIVE · ${formatAsOf(firstPage.asOf)} 기준` : '실시간 추천 순위'}</p>
+        <p className={styles.eyebrow}>{isFinal ? 'FINAL CHART' : 'DAILY CHART'}</p>
+        <h1>{isFinal ? `${formatChartDate(selectedDate)} 차트` : '오늘의 차트'}</h1>
+        <p>{firstPage
+          ? `${firstPage.status} · ${formatAsOf(firstPage.asOf)} ${firstPage.status === 'FINAL' ? '확정' : '기준'}`
+          : isFinal ? '확정된 일일 추천 순위' : '실시간 추천 순위'}</p>
       </header>
+      <div className={styles.chartFilters}>
+        <label className={styles.chartDatePicker}>
+          <CalendarDays aria-hidden="true" size={16} />
+          <span>차트 날짜</span>
+          <input
+            aria-label="차트 날짜"
+            type="date"
+            max={today}
+            value={selectedDate}
+            onChange={(event) => selectDate(event.target.value)}
+          />
+        </label>
+      </div>
       <div className={styles.genreTabs} role="tablist" aria-label="장르">
         <button
           className={selectedGenre === 'all' ? styles.activeGenre : undefined}
           role="tab"
           aria-selected={selectedGenre === 'all'}
-          onClick={() => setSelectedGenre('all')}
+          onClick={() => selectGenre('all')}
         >
           전체
         </button>
@@ -114,13 +168,13 @@ export function ChartPage() {
             role="tab"
             aria-selected={selectedGenre === genre.code}
             key={genre.id}
-            onClick={() => setSelectedGenre(genre.code)}
+            onClick={() => selectGenre(genre.code)}
           >
             {genre.displayName}
           </button>
         ))}
       </div>
-      <section className={styles.chartPanel} aria-label="오늘의 순위" aria-busy={chart.isPending}>
+      <section className={styles.chartPanel} aria-label={isFinal ? '과거 일일 순위' : '오늘의 순위'} aria-busy={chart.isPending}>
         <div className={styles.chartColumns} aria-hidden="true">
           <span>순위</span><span>곡</span><span>추천</span>
         </div>
@@ -135,7 +189,7 @@ export function ChartPage() {
         ) : items.length === 0 ? (
           <div className={styles.chartMessage}>
             <Disc3 aria-hidden="true" size={28} strokeWidth={1.5} />
-            <span>이 장르의 첫 추천을 기다리고 있어요.</span>
+            <span>{isFinal ? '이 날짜에는 확정된 추천이 없어요.' : '이 장르의 첫 추천을 기다리고 있어요.'}</span>
           </div>
         ) : (
           <ol className={styles.chartList}>
@@ -173,7 +227,7 @@ export function ChartPage() {
                   </div>
                   <div className={styles.chartVoteCell}>
                     <strong>{item.voteCount}표</strong>
-                    {account ? (
+                    {account && canVote ? (
                       <button
                         className={item.hasVotedToday ? styles.votedButton : undefined}
                         type="button"

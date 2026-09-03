@@ -260,10 +260,11 @@ Spring annotation에서 spec을 생성하는 code-first 방식은 backend 구현
 
 - Spring `@Scheduled`를 사용한다.
 - `Asia/Seoul` 기준 매일 00:05에 전날 날짜를 인자로 application service를 호출한다.
-- scheduler는 먼저 `ranking_runs`에 대상 날짜를 `INSERT ... ON CONFLICT DO NOTHING`으로 claim한다.
+- scheduler는 먼저 `ranking_runs`에 대상 날짜를 원자적으로 claim하며 실패하거나 장시간 멈춘 run은 같은 application service로 재시도한다.
 - claim한 instance만 전체 및 장르별 snapshot을 계산한다.
 - 완료 전 snapshot은 공개하지 않고 `COMPLETED` 상태에서만 `FINAL`로 조회한다.
 - 실패 run은 원인을 보존하고 동일 application service를 운영 명령이나 test에서 재실행할 수 있게 한다.
+- 유휴 상태의 무료 application server가 예약 시각을 놓친 경우 최초 과거 차트 조회가 누락된 날짜를 동일한 claim 절차로 확정한다.
 
 Quartz, Spring Batch, 별도 Worker와 Redis distributed lock은 MVP에 도입하지 않는다. Ranking 단계가 여러 job과 chunk restart를 요구할 정도로 커지면 Phase 13에서 Spring Batch를 검토한다.
 

@@ -12,7 +12,7 @@ TrackPick은 사용자가 좋아하는 곡을 장르별로 소개하고, 하루 
 
 ## 현재 구현 상태
 
-Phase 12까지 구현되어 계정 인증부터 Apple 음악 검색, 곡 추천, 오늘의 실시간 차트와 홈 음악 발견 피드까지 사용할 수 있습니다.
+Phase 13까지 구현되어 계정 인증부터 Apple 음악 검색, 곡 추천, 오늘의 실시간 차트와 과거 확정 차트까지 사용할 수 있습니다.
 
 - 이메일과 비밀번호를 사용하는 Supabase 회원가입·로그인
 - 가입 확인 메일과 비밀번호 재설정 메일 요청
@@ -35,11 +35,12 @@ Phase 12까지 구현되어 계정 인증부터 Apple 음악 검색, 곡 추천,
 - 추천순 20곡과 고정 시점 cursor 기반 더 보기
 - 차트에서 기존 Track 추천 및 추천권·순위 즉시 갱신
 - 차트 곡별 Apple 30초 미리듣기와 외부 전체 듣기 링크
+- 매일 00:05 KST 전날 전체·장르별 순위를 확정하는 재실행 가능 Ranking snapshot
+- 날짜별 `FINAL` 과거 차트 조회와 읽기 전용 Top 20 더 보기
+- 유휴 서버가 자정 작업을 놓친 경우 최초 과거 조회에서 누락 snapshot 자동 복구
 - 홈의 오늘 추천 상위 6곡과 최근 등록 6곡 실시간 표시
 - 최근 등록 전체 목록과 고정 시점 cursor 기반 더 보기
 - 홈·최근 목록의 미리듣기, Apple 링크와 추천권 연동
-
-과거 확정 차트와 자정 Ranking snapshot은 다음 Phase에서 구현합니다.
 
 ## 로컬 실행
 
@@ -59,6 +60,8 @@ npm run dev
 ```
 
 프런트엔드는 `http://localhost:5173`, API는 `http://localhost:8080`에서 실행됩니다. Vite 개발 서버가 `/api` 요청을 백엔드로 전달합니다.
+
+프로젝트 루트의 `.env`에 Supabase Auth 설정이 준비되어 있다면 `.\scripts\run-local.ps1`로 로컬 PostgreSQL에 연결한 백엔드를 실행할 수 있습니다. Supabase PostgreSQL 연결 자체를 확인할 때만 `.\scripts\run-local.ps1 -UseConfiguredDatabase`를 사용합니다.
 
 운영 환경에서는 Spring datasource를 Supabase PostgreSQL 연결 정보로 설정하고 `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `AUTH_EMAIL_REDIRECT_URL`, `AUTH_PASSWORD_RECOVERY_REDIRECT_URL`, `IP_HASH_SECRET`, `SESSION_COOKIE_SECURE=true`를 별도로 설정합니다. 실제 이메일 발송에는 Supabase Custom SMTP 설정을 권장합니다. Docker Desktop이 실행 중이어야 로컬 PostgreSQL과 Testcontainers 기반 통합 테스트를 사용할 수 있습니다.
 
@@ -80,6 +83,12 @@ https://<render-host>/recover/password
 ```
 
 로컬 개발을 계속 사용하려면 기존 `http://127.0.0.1:5173/**` Redirect URL도 유지합니다. Render는 HTTPS 인증서를 자동으로 관리하며 운영 쿠키에는 `Secure` 속성이 적용됩니다.
+
+### Render 상태 확인
+
+`.github/workflows/render-health-probe.yml`은 UTC 매시 3분부터 5분 간격으로 공개 health endpoint를 확인합니다. 저장소 변수 `RENDER_HEALTH_URL`에는 `https://<render-host>/actuator/health`를 설정합니다. 수동 실행도 지원하며, 중복 실행은 자동으로 취소됩니다.
+
+이 probe는 Render 무료 Web Service의 유휴 종료를 줄이는 효과가 있지만 가용성을 보장하지는 않습니다. GitHub 예약 실행은 지연되거나 누락될 수 있고, 공개 저장소에 60일간 활동이 없으면 자동 비활성화됩니다. Render가 보장하는 상시 실행이 필요하면 유료 instance를 사용합니다.
 
 ## 검증
 

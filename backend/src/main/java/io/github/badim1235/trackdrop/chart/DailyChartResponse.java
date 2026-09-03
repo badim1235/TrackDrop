@@ -19,7 +19,8 @@ public record DailyChartResponse(
 	Actions actions
 ) {
 	public enum Status {
-		LIVE
+		LIVE,
+		FINAL
 	}
 
 	public record Scope(String type, Genre genre) {
