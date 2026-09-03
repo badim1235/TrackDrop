@@ -25,19 +25,31 @@ public class SupabaseAuthClient implements SupabaseAuthGateway {
 		ObjectMapper objectMapper,
 		SupabaseAuthProperties properties
 	) {
+		this(createRestClient(properties), objectMapper, properties);
+	}
+
+	SupabaseAuthClient(
+		RestClient restClient,
+		ObjectMapper objectMapper,
+		SupabaseAuthProperties properties
+	) {
+		this.restClient = restClient;
+		this.objectMapper = objectMapper;
+		this.properties = properties;
+	}
+
+	private static RestClient createRestClient(SupabaseAuthProperties properties) {
 		HttpClient httpClient = HttpClient.newBuilder()
 			.connectTimeout(Duration.ofSeconds(3))
 			.followRedirects(HttpClient.Redirect.NORMAL)
 			.build();
 		JdkClientHttpRequestFactory requestFactory = new JdkClientHttpRequestFactory(httpClient);
 		requestFactory.setReadTimeout(Duration.ofSeconds(5));
-		this.restClient = RestClient.builder()
+		return RestClient.builder()
 			.baseUrl(properties.url())
 			.requestFactory(requestFactory)
 			.defaultHeader("apikey", properties.publishableKey())
 			.build();
-		this.objectMapper = objectMapper;
-		this.properties = properties;
 	}
 
 	@Override
@@ -84,10 +96,12 @@ public class SupabaseAuthClient implements SupabaseAuthGateway {
 				.body(new PasswordUpdateRequest(password))
 				.retrieve()
 				.onStatus(HttpStatusCode::isError, (httpRequest, response) -> {
-					throw new IdentityException(
-						"PASSWORD_RECOVERY_INVALID",
-						"비밀번호 재설정 링크가 만료되었거나 올바르지 않습니다.",
-						401);
+					JsonNode error = objectMapper.readTree(response.getBody());
+					String code = text(error, "error_code", "code");
+					if ("same_password".equals(code)) {
+						throw IdentityException.passwordUnchanged();
+					}
+					throw IdentityException.passwordRecoveryInvalid();
 				})
 				.toBodilessEntity();
 		}

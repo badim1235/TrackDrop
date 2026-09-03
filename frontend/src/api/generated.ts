@@ -700,6 +700,15 @@ export interface components {
                 "application/json": components["schemas"]["ApiErrorResponse"];
             };
         };
+        /** @description The new password matches the current password. */
+        PasswordReuseError: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ApiErrorResponse"];
+            };
+        };
         /** @description The account or request is not permitted. */
         ForbiddenError: {
             headers: {
@@ -902,6 +911,7 @@ export interface operations {
             };
             400: components["responses"]["ValidationError"];
             401: components["responses"]["AuthenticationError"];
+            422: components["responses"]["PasswordReuseError"];
             429: components["responses"]["RateLimitError"];
         };
     };

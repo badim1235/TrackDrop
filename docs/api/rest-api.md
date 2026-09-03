@@ -392,7 +392,7 @@ Response `200 OK`: account/quota 구조를 반환하고 TrackDrop session cookie
 - 계정 존재 여부를 응답에서 구분하지 않는다.
 - Response `202 Accepted`
 
-Supabase 복구 링크가 `/recover/password`로 돌아오면 frontend는 URL fragment의 짧은 수명 access token을 읽어 새 비밀번호와 함께 `POST /auth/password-reset`으로 전달한다. backend는 token을 로그나 DB에 저장하지 않고 Supabase Auth의 사용자 갱신 API에 전달한다. 성공 응답은 `204 No Content`다.
+Supabase 복구 링크가 `/recover/password`로 돌아오면 frontend는 URL fragment의 짧은 수명 access token을 읽어 새 비밀번호와 함께 `POST /auth/password-reset`으로 전달한다. backend는 token을 로그나 DB에 저장하지 않고 Supabase Auth의 사용자 갱신 API에 전달한다. 성공 응답은 `204 No Content`다. 현재 비밀번호와 같은 값은 `422 PASSWORD_UNCHANGED`, 만료되었거나 올바르지 않은 복구 token은 `401 PASSWORD_RECOVERY_INVALID`로 구분한다.
 
 ### 9.5 POST /auth/logout
 

@@ -38,6 +38,20 @@ public class IdentityException extends RuntimeException {
 			503);
 	}
 
+	public static IdentityException passwordUnchanged() {
+		return new IdentityException(
+			"PASSWORD_UNCHANGED",
+			"이전 비밀번호와 다른 비밀번호를 입력해 주세요.",
+			422);
+	}
+
+	public static IdentityException passwordRecoveryInvalid() {
+		return new IdentityException(
+			"PASSWORD_RECOVERY_INVALID",
+			"비밀번호 재설정 링크가 만료되었거나 올바르지 않습니다.",
+			401);
+	}
+
 	public static IdentityException rateLimited(long retryAfterSeconds) {
 		return new RateLimitedIdentityException(
 			"RATE_LIMITED",
