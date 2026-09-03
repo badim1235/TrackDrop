@@ -18,6 +18,7 @@ import {
   type AccountResponse,
 } from '../api/client'
 import { accountQueryKey, useAccount } from '../auth/account'
+import { detailArtworkUrl } from './artwork'
 
 function detailErrorMessage(error: unknown) {
   if (error instanceof ApiError && error.code === 'TRACK_NOT_FOUND') {
@@ -50,7 +51,7 @@ function DetailArtwork({ src }: { src: string | null }) {
   if (!src || failed) {
     return <div className={styles.detailArtworkFallback}><Disc3 aria-hidden="true" size={44} /></div>
   }
-  return <img className={styles.detailArtwork} src={src} alt="" onError={() => setFailed(true)} />
+  return <img className={styles.detailArtwork} src={detailArtworkUrl(src)} alt="" onError={() => setFailed(true)} />
 }
 
 export function TrackDetailPage() {

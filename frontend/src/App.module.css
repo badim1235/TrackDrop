@@ -520,6 +520,14 @@
   text-align: left;
 }
 
+.searchAuthError {
+  width: 100%;
+  margin: 9px 4px 0 0;
+  color: var(--danger);
+  font-size: 12px;
+  text-align: right;
+}
+
 .loginNotice {
   display: flex;
   align-items: center;

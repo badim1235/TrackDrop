@@ -67,6 +67,7 @@ export function RecommendPage() {
   const { data: account, isLoading: isAccountLoading } = useAccount()
   const [query, setQuery] = useState(() => searchParams.get('query')?.trim() ?? '')
   const [queryError, setQueryError] = useState<string | null>(null)
+  const [searchAuthError, setSearchAuthError] = useState<string | null>(null)
   const [selectedTrack, setSelectedTrack] = useState<MusicSearchItem | null>(null)
   const [comment, setComment] = useState('')
   const [composeError, setComposeError] = useState<string | null>(null)
@@ -129,12 +130,18 @@ export function RecommendPage() {
 
   function submitSearch(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    if (!account) {
+      setQueryError(null)
+      setSearchAuthError('로그인이 필요합니다.')
+      return
+    }
     const normalized = query.trim().replace(/\s+/g, ' ')
     if (Array.from(normalized).length < 1 || Array.from(normalized).length > 100) {
       setQueryError('검색어는 1~100자로 입력해 주세요.')
       return
     }
     setQueryError(null)
+    setSearchAuthError(null)
     shouldScrollToCompose.current = false
     setSelectedTrack(null)
     setVisibleResultCount(10)
@@ -239,14 +246,18 @@ export function RecommendPage() {
           aria-label="곡 또는 아티스트 검색"
           placeholder="곡 또는 아티스트 검색"
           value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          disabled={!account || isAccountLoading}
+          onChange={(event) => {
+            setQuery(event.target.value)
+            setSearchAuthError(null)
+          }}
+          disabled={isAccountLoading}
         />
-        <button type="submit" disabled={!account || search.isPending}>
+        <button type="submit" disabled={isAccountLoading || search.isPending}>
           {search.isPending ? <LoaderCircle className={styles.spinningIcon} aria-hidden="true" size={18} /> : null}
           검색
         </button>
       </form>
+      {searchAuthError ? <p className={styles.searchAuthError} role="alert">{searchAuthError}</p> : null}
       {queryError ? <p className={styles.searchError} role="alert">{queryError}</p> : null}
 
       {account ? (

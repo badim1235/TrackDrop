@@ -561,6 +561,20 @@ describe('TrackPick app shell', () => {
     expect(screen.getByRole('tooltip')).toHaveTextContent('영문자(대·소문자 허용)와 숫자를 각각 1개 이상 포함한 8~16자')
   })
 
+  it('lets signed-out visitors type a search and asks them to log in on submit', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('', { status: 401 }))
+    const user = userEvent.setup()
+    renderApp('/recommend')
+
+    const input = await screen.findByRole('textbox', { name: '곡 또는 아티스트 검색' })
+    await waitFor(() => expect(input).toBeEnabled())
+    await user.type(input, '한로로')
+    await user.click(screen.getByRole('button', { name: '검색' }))
+
+    expect(screen.getByRole('alert')).toHaveTextContent('로그인이 필요합니다.')
+    expect(fetchMock).not.toHaveBeenCalledWith(expect.stringContaining('/api/v1/music/search'), expect.anything())
+  })
+
   it('searches the KR catalog and marks explicit tracks', async () => {
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
       const url = String(input)
