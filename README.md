@@ -91,9 +91,9 @@ https://<render-host>/recover/password
 
 ### Render 상태 확인
 
-`.github/workflows/render-health-probe.yml`은 UTC 매시 3분부터 5분 간격으로 공개 health endpoint를 확인합니다. 저장소 변수 `RENDER_HEALTH_URL`에는 `https://<render-host>/actuator/health`를 설정합니다. 수동 실행도 지원하며, 중복 실행은 자동으로 취소됩니다.
+운영 환경에서는 UptimeRobot의 Keyword Monitor가 5분 간격으로 `https://trackpick.net/actuator/health`를 조회합니다. 응답 본문의 `"status":"UP"` 키워드가 없으면 장애로 판단하도록 설정합니다.
 
-이 probe는 Render 무료 Web Service의 유휴 종료를 줄이는 효과가 있지만 가용성을 보장하지는 않습니다. GitHub 예약 실행은 지연되거나 누락될 수 있고, 공개 저장소에 60일간 활동이 없으면 자동 비활성화됩니다. Render가 보장하는 상시 실행이 필요하면 유료 instance를 사용합니다.
+이 모니터는 실제 GET 요청으로 Render 무료 Web Service의 유휴 종료를 줄이고 장애 알림을 제공합니다. 다만 무료 외부 모니터링은 가용성을 보장하지 않으므로, 상시 실행 보장이 필요하면 Render 유료 instance를 사용합니다.
 
 ## 검증
 
