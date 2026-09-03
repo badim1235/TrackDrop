@@ -86,6 +86,10 @@ describe('TrackPick app shell', () => {
     expect(screen.getByText('최신곡')).toBeInTheDocument()
     expect(screen.getByText('오늘 4표')).toBeInTheDocument()
     expect(screen.getByLabelText('인기곡 30초 미리듣기')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '인기곡' })).toHaveAttribute(
+      'href',
+      '/tracks/20000000-0000-0000-0000-000000000001',
+    )
     expect(screen.getByRole('link', { name: /전체 보기/ })).toHaveAttribute('href', '/recent')
   })
 
@@ -143,6 +147,82 @@ describe('TrackPick app shell', () => {
 
     await user.click(screen.getAllByRole('link', { name: /차트/ })[0])
     expect(screen.getByRole('heading', { name: '오늘의 차트' })).toBeInTheDocument()
+  })
+
+  it('renders a public track detail with preview, ranks, and a login vote action', async () => {
+    const trackId = '20000000-0000-0000-0000-000000000001'
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = String(input)
+      if (url === '/api/v1/me') return new Response('', { status: 401 })
+      if (url === `/api/v1/tracks/${trackId}`) {
+        return Response.json({
+          track: {
+            id: trackId,
+            title: '0+0',
+            artistName: '한로로',
+            albumName: '이상비행',
+            albumCoverUrl: 'https://example.com/cover.jpg',
+            releaseYear: 2025,
+            isrc: null,
+            explicit: false,
+            providerGenreName: 'Rock',
+            primaryGenre: {
+              id: '10000000-0000-0000-0000-000000000020',
+              code: 'rock', displayName: 'Rock', sortOrder: 200,
+            },
+            genres: [{
+              id: '10000000-0000-0000-0000-000000000020',
+              code: 'rock', displayName: 'Rock', sortOrder: 200,
+            }],
+            recommendation: {
+              id: '30000000-0000-0000-0000-000000000001',
+              comment: '처음 들은 순간부터 좋았어요.',
+              commentAvailable: true,
+              recommenderNickname: '새벽리듬4881',
+              createdAt: '2026-09-01T04:00:00Z',
+            },
+            viewer: null,
+            preview: {
+              available: true,
+              provider: 'APPLE_MUSIC',
+              kind: 'OFFICIAL_30_SECOND_CLIP',
+              startPosition: 'PROVIDER_SELECTED',
+              url: 'https://example.com/preview.m4a',
+            },
+            providerReferences: [{
+              provider: 'APPLE_MUSIC',
+              externalTrackId: '1828393595',
+              externalUrl: 'https://music.apple.com/kr/song/1828393595',
+              metadataRefreshedAt: '2026-09-01T04:00:00Z',
+            }],
+          },
+          today: {
+            voteCount: 7,
+            overallRank: 2,
+            genreRank: 1,
+            asOf: '2026-09-03T04:00:00Z',
+          },
+          quota: null,
+          actions: { canVote: false, reason: 'UNAUTHENTICATED' },
+        })
+      }
+      return new Response('', { status: 404 })
+    })
+    renderApp(`/tracks/${trackId}`)
+
+    expect(await screen.findByRole('heading', { name: '0+0' })).toBeInTheDocument()
+    expect(screen.getByText('한로로')).toBeInTheDocument()
+    expect(screen.getByText('7표')).toBeInTheDocument()
+    expect(screen.getByText('2위')).toBeInTheDocument()
+    expect(screen.getByText(/처음 들은 순간부터 좋았어요/)).toBeInTheDocument()
+    expect(screen.getByLabelText('0+0 30초 미리듣기')).toHaveAttribute(
+      'src',
+      'https://example.com/preview.m4a',
+    )
+    expect(screen.getByRole('link', { name: /로그인하고 추천/ })).toHaveAttribute(
+      'href',
+      `/login?returnTo=%2Ftracks%2F${trackId}`,
+    )
   })
 
   it('renders registered tracks from the live daily chart', async () => {

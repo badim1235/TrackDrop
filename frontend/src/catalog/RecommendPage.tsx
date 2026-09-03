@@ -214,6 +214,7 @@ export function RecommendPage() {
           </p>
           <div className={styles.successActions}>
             <NavLink to="/">홈으로</NavLink>
+            <NavLink to={`/tracks/${create.data.track.id}`}>곡 상세</NavLink>
             {create.data.quota.remaining > 0 ? (
               <button type="button" onClick={resetRecommendation}>
                 <RotateCcw aria-hidden="true" size={16} /> 다른 곡 추천
@@ -304,22 +305,25 @@ export function RecommendPage() {
                         </a>
                       ) : null}
                       {track.existingTrack.registered && existingTrackId ? (
-                        <button
-                          className={hasVoted ? styles.votedButton : undefined}
-                          type="button"
-                          aria-pressed={hasVoted}
-                          disabled={hasVoted || quotaEmpty || vote.isPending}
-                          onClick={() => vote.mutate(existingTrackId)}
-                        >
-                          {isVoting ? (
-                            <LoaderCircle className={styles.spinningIcon} aria-hidden="true" size={15} />
-                          ) : hasVoted ? (
-                            <Check aria-hidden="true" size={15} />
-                          ) : (
-                            <ThumbsUp aria-hidden="true" size={15} />
-                          )}
-                          {isVoting ? '추천 중' : hasVoted ? '추천 완료' : quotaEmpty ? '추천권 없음' : '추천'}
-                        </button>
+                        <>
+                          <NavLink to={`/tracks/${existingTrackId}`}>상세</NavLink>
+                          <button
+                            className={hasVoted ? styles.votedButton : undefined}
+                            type="button"
+                            aria-pressed={hasVoted}
+                            disabled={hasVoted || quotaEmpty || vote.isPending}
+                            onClick={() => vote.mutate(existingTrackId)}
+                          >
+                            {isVoting ? (
+                              <LoaderCircle className={styles.spinningIcon} aria-hidden="true" size={15} />
+                            ) : hasVoted ? (
+                              <Check aria-hidden="true" size={15} />
+                            ) : (
+                              <ThumbsUp aria-hidden="true" size={15} />
+                            )}
+                            {isVoting ? '추천 중' : hasVoted ? '추천 완료' : quotaEmpty ? '추천권 없음' : '추천'}
+                          </button>
+                        </>
                       ) : (
                         <button
                           type="button"

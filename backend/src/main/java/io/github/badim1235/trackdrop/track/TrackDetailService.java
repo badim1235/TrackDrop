@@ -1,0 +1,264 @@
+package io.github.badim1235.trackdrop.track;
+
+import io.github.badim1235.trackdrop.catalog.GenreResponse.Genre;
+import io.github.badim1235.trackdrop.catalog.MusicProvider;
+import io.github.badim1235.trackdrop.shared.quota.DailyQuotaService;
+import io.github.badim1235.trackdrop.shared.quota.DailyQuotaSnapshot;
+import io.github.badim1235.trackdrop.track.TrackDetailResponse.Actions;
+import io.github.badim1235.trackdrop.track.TrackDetailResponse.Preview;
+import io.github.badim1235.trackdrop.track.TrackDetailResponse.ProviderReference;
+import io.github.badim1235.trackdrop.track.TrackDetailResponse.Recommendation;
+import io.github.badim1235.trackdrop.track.TrackDetailResponse.Today;
+import io.github.badim1235.trackdrop.track.TrackDetailResponse.Track;
+import io.github.badim1235.trackdrop.track.TrackDetailResponse.Viewer;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.OffsetDateTime;
+import java.time.ZoneId;
+import java.time.ZoneOffset;
+import java.util.List;
+import java.util.UUID;
+import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+@Service
+class TrackDetailService {
+	private static final ZoneId SERVICE_ZONE = ZoneId.of("Asia/Seoul");
+	private static final UUID EMPTY_UUID = new UUID(0, 0);
+	private static final String DETAIL_SQL = """
+		WITH vote_counts AS (
+			SELECT vote.track_id, COUNT(vote.id)::INTEGER AS vote_count
+			FROM votes vote
+			WHERE vote.voted_on = :today
+			  AND vote.created_at <= :asOf
+			GROUP BY vote.track_id
+		), ranked AS (
+			SELECT
+				vote_counts.track_id,
+				vote_counts.vote_count,
+				ROW_NUMBER() OVER (
+					ORDER BY
+						vote_counts.vote_count DESC,
+						track.title COLLATE trackdrop_nocase ASC,
+						track.artist_name COLLATE trackdrop_nocase ASC,
+						track.id ASC
+				) AS overall_rank,
+				ROW_NUMBER() OVER (
+					PARTITION BY recommendation.primary_genre_id
+					ORDER BY
+						vote_counts.vote_count DESC,
+						track.title COLLATE trackdrop_nocase ASC,
+						track.artist_name COLLATE trackdrop_nocase ASC,
+						track.id ASC
+				) AS genre_rank
+			FROM vote_counts
+			JOIN tracks track ON track.id = vote_counts.track_id
+			JOIN recommendations recommendation ON recommendation.track_id = track.id
+		)
+		SELECT
+			track.id,
+			track.title,
+			track.artist_name,
+			track.album_name,
+			track.album_cover_url,
+			track.release_year,
+			track.isrc,
+			track.explicit,
+			track.provider_genre_name,
+			genre.id AS genre_id,
+			genre.code AS genre_code,
+			genre.display_name AS genre_display_name,
+			genre.sort_order AS genre_sort_order,
+			recommendation.id AS recommendation_id,
+			CASE WHEN recommendation.comment_visibility = 'VISIBLE' THEN recommendation.comment END AS comment,
+			CASE WHEN recommendation.comment_visibility = 'VISIBLE' THEN recommender.public_nickname END AS recommender_nickname,
+			recommendation.created_at AS recommendation_created_at,
+			provider_ref.external_track_id,
+			provider_ref.external_url,
+			provider_ref.preview_url,
+			provider_ref.metadata_refreshed_at,
+			COALESCE(ranked.vote_count, 0) AS today_vote_count,
+			ranked.overall_rank,
+			ranked.genre_rank,
+			EXISTS (
+				SELECT 1
+				FROM votes viewer_vote
+				WHERE viewer_vote.user_id = :viewerId
+				  AND viewer_vote.track_id = track.id
+				  AND viewer_vote.voted_on = :today
+			) AS has_voted_today
+		FROM tracks track
+		JOIN recommendations recommendation ON recommendation.track_id = track.id
+		JOIN users recommender ON recommender.id = recommendation.recommender_user_id
+		JOIN genres genre ON genre.id = recommendation.primary_genre_id
+		JOIN track_provider_refs provider_ref
+		  ON provider_ref.track_id = track.id AND provider_ref.provider = 'APPLE_MUSIC'
+		LEFT JOIN ranked ON ranked.track_id = track.id
+		WHERE track.id = :trackId
+		""";
+
+	private final JdbcClient jdbcClient;
+	private final DailyQuotaService quotaService;
+	private final Clock clock;
+
+	TrackDetailService(JdbcClient jdbcClient, DailyQuotaService quotaService, Clock clock) {
+		this.jdbcClient = jdbcClient;
+		this.quotaService = quotaService;
+		this.clock = clock;
+	}
+
+	@Transactional(readOnly = true)
+	TrackDetailResponse get(UUID trackId, UUID viewerId) {
+		Instant asOf = clock.instant();
+		LocalDate today = LocalDate.ofInstant(asOf, SERVICE_ZONE);
+		boolean authenticated = viewerId != null;
+		TrackRow row = jdbcClient.sql(DETAIL_SQL)
+			.param("today", today)
+			.param("asOf", OffsetDateTime.ofInstant(asOf, ZoneOffset.UTC))
+			.param("viewerId", authenticated ? viewerId : EMPTY_UUID)
+			.param("trackId", trackId)
+			.query(TrackDetailService::mapRow)
+			.optional()
+			.orElseThrow(TrackDetailException::notFound);
+		List<Genre> genres = findGenres(trackId);
+		DailyQuotaSnapshot quota = authenticated ? quotaService.current(viewerId) : null;
+		Actions actions = actions(authenticated, row.hasVotedToday(), quota);
+		String previewUrl = row.previewUrl();
+
+		Track track = new Track(
+			row.id(),
+			row.title(),
+			row.artistName(),
+			row.albumName(),
+			row.albumCoverUrl(),
+			row.releaseYear(),
+			row.isrc(),
+			row.explicit(),
+			row.providerGenreName(),
+			row.primaryGenre(),
+			genres,
+			new Recommendation(
+				row.recommendationId(),
+				row.comment(),
+				row.comment() != null,
+				row.recommenderNickname(),
+				row.recommendationCreatedAt()),
+			authenticated ? new Viewer(row.hasVotedToday()) : null,
+			new Preview(
+				previewUrl != null,
+				MusicProvider.APPLE_MUSIC,
+				"OFFICIAL_30_SECOND_CLIP",
+				"PROVIDER_SELECTED",
+				previewUrl),
+			List.of(new ProviderReference(
+				MusicProvider.APPLE_MUSIC,
+				row.externalTrackId(),
+				row.externalUrl(),
+				row.metadataRefreshedAt())));
+
+		return new TrackDetailResponse(
+			track,
+			new Today(row.todayVoteCount(), row.overallRank(), row.genreRank(), asOf),
+			quota,
+			actions);
+	}
+
+	private List<Genre> findGenres(UUID trackId) {
+		return jdbcClient.sql("""
+				SELECT genre.id, genre.code, genre.display_name, genre.sort_order
+				FROM track_genres track_genre
+				JOIN genres genre ON genre.id = track_genre.genre_id
+				WHERE track_genre.track_id = :trackId
+				ORDER BY genre.sort_order, genre.id
+				""")
+			.param("trackId", trackId)
+			.query((row, rowNumber) -> new Genre(
+				row.getObject("id", UUID.class),
+				row.getString("code"),
+				row.getString("display_name"),
+				row.getInt("sort_order")))
+			.list();
+	}
+
+	private static Actions actions(
+		boolean authenticated,
+		boolean hasVotedToday,
+		DailyQuotaSnapshot quota
+	) {
+		if (!authenticated) {
+			return new Actions(false, "UNAUTHENTICATED");
+		}
+		if (hasVotedToday) {
+			return new Actions(false, "ALREADY_VOTED");
+		}
+		if (quota.remaining() == 0) {
+			return new Actions(false, "DAILY_LIMIT_EXCEEDED");
+		}
+		return new Actions(true, null);
+	}
+
+	private static TrackRow mapRow(ResultSet row, int rowNumber) throws SQLException {
+		return new TrackRow(
+			row.getObject("id", UUID.class),
+			row.getString("title"),
+			row.getString("artist_name"),
+			row.getString("album_name"),
+			row.getString("album_cover_url"),
+			row.getObject("release_year") == null ? null : row.getInt("release_year"),
+			row.getString("isrc"),
+			row.getBoolean("explicit"),
+			row.getString("provider_genre_name"),
+			new Genre(
+				row.getObject("genre_id", UUID.class),
+				row.getString("genre_code"),
+				row.getString("genre_display_name"),
+				row.getInt("genre_sort_order")),
+			row.getObject("recommendation_id", UUID.class),
+			row.getString("comment"),
+			row.getString("recommender_nickname"),
+			row.getObject("recommendation_created_at", OffsetDateTime.class).toInstant(),
+			row.getString("external_track_id"),
+			row.getString("external_url"),
+			row.getString("preview_url"),
+			row.getObject("metadata_refreshed_at", OffsetDateTime.class).toInstant(),
+			row.getInt("today_vote_count"),
+			nullableLong(row, "overall_rank"),
+			nullableLong(row, "genre_rank"),
+			row.getBoolean("has_voted_today"));
+	}
+
+	private static Long nullableLong(ResultSet row, String column) throws SQLException {
+		Number value = (Number) row.getObject(column);
+		return value == null ? null : value.longValue();
+	}
+
+	private record TrackRow(
+		UUID id,
+		String title,
+		String artistName,
+		String albumName,
+		String albumCoverUrl,
+		Integer releaseYear,
+		String isrc,
+		boolean explicit,
+		String providerGenreName,
+		Genre primaryGenre,
+		UUID recommendationId,
+		String comment,
+		String recommenderNickname,
+		Instant recommendationCreatedAt,
+		String externalTrackId,
+		String externalUrl,
+		String previewUrl,
+		Instant metadataRefreshedAt,
+		int todayVoteCount,
+		Long overallRank,
+		Long genreRank,
+		boolean hasVotedToday
+	) {
+	}
+}

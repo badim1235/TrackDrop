@@ -41,6 +41,9 @@ Phase 13까지 구현되어 계정 인증부터 Apple 음악 검색, 곡 추천,
 - 홈의 오늘 추천 상위 6곡과 오늘 최근 등록 6곡 실시간 표시
 - 오늘 최근 등록 전체 목록과 고정 시점 cursor 기반 더 보기
 - 홈·최근 목록의 미리듣기, Apple 링크와 추천권 연동
+- 홈·차트·검색 결과에서 이어지는 공개 곡 상세 화면
+- 곡 상세의 오늘 득표수, 전체·장르 순위, 한줄평, 미리듣기와 추천권 연동
+- 동일 사용자 중복·자기 신고를 막는 한줄평 신고 API와 저장 구조 (`REPORTS_ENABLED=false`로 기본 숨김)
 
 ## 로컬 실행
 
@@ -64,6 +67,8 @@ npm run dev
 프로젝트 루트의 `.env`에 Supabase Auth 설정이 준비되어 있다면 `.\scripts\run-local.ps1`로 로컬 PostgreSQL에 연결한 백엔드를 실행할 수 있습니다. Supabase PostgreSQL 연결 자체를 확인할 때만 `.\scripts\run-local.ps1 -UseConfiguredDatabase`를 사용합니다.
 
 운영 환경에서는 Spring datasource를 Supabase PostgreSQL 연결 정보로 설정하고 `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `AUTH_EMAIL_REDIRECT_URL`, `AUTH_PASSWORD_RECOVERY_REDIRECT_URL`, `IP_HASH_SECRET`, `SESSION_COOKIE_SECURE=true`를 별도로 설정합니다. 실제 이메일 발송에는 Supabase Custom SMTP 설정을 권장합니다. Docker Desktop이 실행 중이어야 로컬 PostgreSQL과 Testcontainers 기반 통합 테스트를 사용할 수 있습니다.
+
+한줄평 신고 기능은 저장 구조와 API만 준비되어 있으며 기본값은 비활성입니다. 운영 정책과 검토 절차를 마련한 뒤에만 `REPORTS_ENABLED=true`로 켜며, 현재 프런트엔드에는 신고 진입점을 노출하지 않습니다.
 
 ## Render 배포
 

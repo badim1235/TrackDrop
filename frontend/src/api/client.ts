@@ -14,6 +14,7 @@ export type Genre = components['schemas']['Genre']
 export type HomeResponse = components['schemas']['HomeResponse']
 export type HomeTrackCard = components['schemas']['HomeTrackCard']
 export type RecentTracksResponse = components['schemas']['RecentTracksResponse']
+export type TrackDetailResponse = components['schemas']['TrackDetailResponse']
 export type DailyChartResponse = components['schemas']['DailyChartResponse']
 export type CreateRecommendationRequest = components['schemas']['CreateRecommendationRequest']
 export type CreateRecommendationResponse = components['schemas']['CreateRecommendationResponse']
@@ -133,6 +134,15 @@ export async function fetchRecentTracks(cursor?: string): Promise<RecentTracksRe
   })
   if (!response.ok) throw await parseError(response)
   return response.json() as Promise<RecentTracksResponse>
+}
+
+export async function fetchTrackDetail(trackId: string): Promise<TrackDetailResponse> {
+  const response = await fetch(`/api/v1/tracks/${encodeURIComponent(trackId)}`, {
+    credentials: 'include',
+    headers: { Accept: 'application/json' },
+  })
+  if (!response.ok) throw await parseError(response)
+  return response.json() as Promise<TrackDetailResponse>
 }
 
 export async function fetchDailyChart(

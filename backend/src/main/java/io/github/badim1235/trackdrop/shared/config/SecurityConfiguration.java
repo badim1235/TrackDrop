@@ -46,28 +46,40 @@ public class SecurityConfiguration {
 		HttpSecurity http,
 		AuthRateLimitFilter authRateLimitFilter,
 		RememberedSessionCookie rememberedSessionCookie,
-		SecurityContextRepository securityContextRepository
+		SecurityContextRepository securityContextRepository,
+		@Value("${trackdrop.features.reports-enabled:false}") boolean reportsEnabled
 	) throws Exception {
 		CookieCsrfTokenRepository csrfRepository = CookieCsrfTokenRepository.withHttpOnlyFalse();
 		csrfRepository.setCookiePath("/");
 
 		http
-			.authorizeHttpRequests(authorize -> authorize
-				.requestMatchers(
+			.authorizeHttpRequests(authorize -> {
+				authorize.requestMatchers(
 					"/", "/index.html", "/chart", "/recent", "/recommend", "/login", "/join", "/me",
-					"/recover/id", "/recover/password",
-					"/assets/**", "/favicon.ico").permitAll()
-				.requestMatchers(HttpMethod.GET,
-					"/api/v1/auth/csrf").permitAll()
-				.requestMatchers(HttpMethod.GET, "/api/v1/genres").permitAll()
-				.requestMatchers(HttpMethod.GET, "/api/v1/home", "/api/v1/tracks/recent").permitAll()
-				.requestMatchers(HttpMethod.GET, "/api/v1/charts/daily").permitAll()
-				.requestMatchers(HttpMethod.POST,
+					"/tracks/*",
+					"/recover/id", "/recover/password", "/assets/**", "/favicon.ico").permitAll();
+				authorize.requestMatchers(HttpMethod.GET, "/api/v1/auth/csrf").permitAll();
+				authorize.requestMatchers(HttpMethod.GET, "/api/v1/genres").permitAll();
+				authorize.requestMatchers(
+					HttpMethod.GET, "/api/v1/home", "/api/v1/tracks/recent", "/api/v1/tracks/*").permitAll();
+				authorize.requestMatchers(HttpMethod.GET, "/api/v1/charts/daily").permitAll();
+				authorize.requestMatchers(HttpMethod.POST,
 					"/api/v1/auth/sign-up", "/api/v1/auth/login",
-					"/api/v1/auth/password-recovery", "/api/v1/auth/password-reset").permitAll()
-				.requestMatchers("/api/v1/system/health", "/actuator/health", "/actuator/info").permitAll()
-				.anyRequest().authenticated())
-			.csrf(csrf -> csrf.csrfTokenRepository(csrfRepository))
+					"/api/v1/auth/password-recovery", "/api/v1/auth/password-reset").permitAll();
+				authorize.requestMatchers(
+					"/api/v1/system/health", "/actuator/health", "/actuator/info").permitAll();
+				if (!reportsEnabled) {
+					authorize.requestMatchers(
+						HttpMethod.POST, "/api/v1/recommendations/*/reports").permitAll();
+				}
+				authorize.anyRequest().authenticated();
+			})
+			.csrf(csrf -> {
+				csrf.csrfTokenRepository(csrfRepository);
+				if (!reportsEnabled) {
+					csrf.ignoringRequestMatchers("/api/v1/recommendations/*/reports");
+				}
+			})
 			.securityContext(context -> context.securityContextRepository(securityContextRepository))
 			.exceptionHandling(exceptions -> exceptions
 				.authenticationEntryPoint((request, response, exception) -> writeSecurityError(

@@ -1,7 +1,7 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, CalendarDays, Check, Disc3, ExternalLink, LoaderCircle, ThumbsUp } from 'lucide-react'
 import { useState } from 'react'
-import { useSearchParams } from 'react-router'
+import { NavLink, useSearchParams } from 'react-router'
 import styles from '../App.module.css'
 import {
   ApiError,
@@ -192,7 +192,7 @@ export function ChartPage() {
         ) : items.length === 0 ? (
           <div className={styles.chartMessage}>
             <Disc3 aria-hidden="true" size={28} strokeWidth={1.5} />
-            <span>{isFinal ? '이 날짜에는 확정된 추천이 없어요.' : '이 장르의 첫 추천을 기다리고 있어요.'}</span>
+            <span>{isFinal ? '이 날짜에는 등록된 곡이 없어요.' : '이 장르의 첫 추천을 기다리고 있어요.'}</span>
           </div>
         ) : (
           <ol className={styles.chartList}>
@@ -204,7 +204,7 @@ export function ChartPage() {
                   <ChartArtwork track={item.track} />
                   <div className={styles.chartTrackInfo}>
                     <div className={styles.trackTitleLine}>
-                      <strong>{item.track.title}</strong>
+                      <strong><NavLink className={styles.trackDetailLink} to={`/tracks/${item.track.id}`}>{item.track.title}</NavLink></strong>
                       {item.track.explicit ? <span className={styles.explicitBadge}>Explicit</span> : null}
                     </div>
                     <span>{item.track.artistName}</span>

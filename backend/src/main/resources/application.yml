@@ -32,6 +32,8 @@ server:
         secure: ${SESSION_COOKIE_SECURE:false}
 
 trackdrop:
+  features:
+    reports-enabled: ${REPORTS_ENABLED:false}
   ranking:
     cron: "${RANKING_SNAPSHOT_CRON:0 0 0 * * *}"
   security:

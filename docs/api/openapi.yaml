@@ -240,6 +240,34 @@ paths:
                 $ref: '#/components/schemas/RecentTracksResponse'
         '400':
           $ref: '#/components/responses/ValidationError'
+  /tracks/{trackId}:
+    get:
+      operationId: getTrackDetail
+      summary: Read a registered track with today's rank and viewer state
+      tags: [Track]
+      security:
+        - sessionCookie: []
+        - {}
+      parameters:
+        - name: trackId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Full track metadata, original recommendation, and today's vote state.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TrackDetailResponse'
+        '404':
+          description: The track does not exist.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
   /charts/daily:
     get:
       operationId: getDailyChart
@@ -309,6 +337,46 @@ paths:
           $ref: '#/components/responses/RateLimitError'
         '503':
           $ref: '#/components/responses/MusicProviderError'
+  /recommendations/{recommendationId}/reports:
+    post:
+      operationId: createRecommendationReport
+      summary: Report a recommendation comment when the hidden feature is enabled
+      tags: [Moderation]
+      parameters:
+        - name: recommendationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - $ref: '#/components/parameters/CsrfHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateReportRequest'
+      responses:
+        '201':
+          description: The report was created without changing comment visibility.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateReportResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/AuthenticationError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          description: The feature is disabled or the recommendation does not exist.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiErrorResponse'
+        '409':
+          $ref: '#/components/responses/ConflictError'
   /tracks/{trackId}/votes:
     post:
       operationId: createVote
@@ -795,6 +863,146 @@ components:
           type: boolean
         nextCursor:
           type: [string, 'null']
+    TrackDetailResponse:
+      type: object
+      additionalProperties: false
+      required: [track, today, quota, actions]
+      properties:
+        track:
+          $ref: '#/components/schemas/TrackDetail'
+        today:
+          $ref: '#/components/schemas/TrackToday'
+        quota:
+          oneOf:
+            - $ref: '#/components/schemas/DailyQuota'
+            - type: 'null'
+        actions:
+          $ref: '#/components/schemas/TrackActions'
+    TrackDetail:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - title
+        - artistName
+        - albumName
+        - albumCoverUrl
+        - releaseYear
+        - isrc
+        - explicit
+        - providerGenreName
+        - primaryGenre
+        - genres
+        - recommendation
+        - viewer
+        - preview
+        - providerReferences
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        artistName:
+          type: string
+        albumName:
+          type: [string, 'null']
+        albumCoverUrl:
+          type: [string, 'null']
+          format: uri
+        releaseYear:
+          type: [integer, 'null']
+        isrc:
+          type: [string, 'null']
+        explicit:
+          type: boolean
+        providerGenreName:
+          type: [string, 'null']
+        primaryGenre:
+          $ref: '#/components/schemas/Genre'
+        genres:
+          type: array
+          items:
+            $ref: '#/components/schemas/Genre'
+        recommendation:
+          $ref: '#/components/schemas/TrackRecommendation'
+        viewer:
+          oneOf:
+            - $ref: '#/components/schemas/TrackViewer'
+            - type: 'null'
+        preview:
+          $ref: '#/components/schemas/MusicPreview'
+        providerReferences:
+          type: array
+          items:
+            $ref: '#/components/schemas/TrackProviderReference'
+    TrackRecommendation:
+      type: object
+      additionalProperties: false
+      required: [id, comment, commentAvailable, recommenderNickname, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        comment:
+          type: [string, 'null']
+        commentAvailable:
+          type: boolean
+        recommenderNickname:
+          type: [string, 'null']
+        createdAt:
+          type: string
+          format: date-time
+    TrackViewer:
+      type: object
+      additionalProperties: false
+      required: [hasVotedToday]
+      properties:
+        hasVotedToday:
+          type: boolean
+    TrackProviderReference:
+      type: object
+      additionalProperties: false
+      required: [provider, externalTrackId, externalUrl, metadataRefreshedAt]
+      properties:
+        provider:
+          type: string
+          const: APPLE_MUSIC
+        externalTrackId:
+          type: string
+        externalUrl:
+          type: [string, 'null']
+          format: uri
+        metadataRefreshedAt:
+          type: string
+          format: date-time
+    TrackToday:
+      type: object
+      additionalProperties: false
+      required: [voteCount, overallRank, genreRank, asOf]
+      properties:
+        voteCount:
+          type: integer
+          minimum: 0
+        overallRank:
+          type: [integer, 'null']
+          minimum: 1
+        genreRank:
+          type: [integer, 'null']
+          minimum: 1
+        asOf:
+          type: string
+          format: date-time
+    TrackActions:
+      type: object
+      additionalProperties: false
+      required: [canVote, reason]
+      properties:
+        canVote:
+          type: boolean
+        reason:
+          type: [string, 'null']
+          enum: [UNAUTHENTICATED, ALREADY_VOTED, DAILY_LIMIT_EXCEEDED, null]
     DailyChartResponse:
       type: object
       additionalProperties: false
@@ -1022,6 +1230,38 @@ components:
         votedOn:
           type: string
           format: date
+    CreateReportRequest:
+      type: object
+      additionalProperties: false
+      required: [reasonCode]
+      properties:
+        reasonCode:
+          type: string
+          enum: [ABUSIVE_LANGUAGE, SPAM, OTHER]
+        details:
+          type: [string, 'null']
+          maxLength: 500
+    CreateReportResponse:
+      type: object
+      additionalProperties: false
+      required: [report]
+      properties:
+        report:
+          $ref: '#/components/schemas/CreatedReport'
+    CreatedReport:
+      type: object
+      additionalProperties: false
+      required: [id, status, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          const: PENDING
+        createdAt:
+          type: string
+          format: date-time
     CreateVoteResponse:
       type: object
       additionalProperties: false

@@ -6,8 +6,10 @@ import io.github.badim1235.trackdrop.home.HomeFeedException;
 import io.github.badim1235.trackdrop.identity.IdentityException;
 import io.github.badim1235.trackdrop.identity.IdentityException.RateLimitedIdentityException;
 import io.github.badim1235.trackdrop.identity.IdentityException.SignupBlockedIdentityException;
+import io.github.badim1235.trackdrop.moderation.ReportException;
 import io.github.badim1235.trackdrop.recommendation.RecommendationException;
 import io.github.badim1235.trackdrop.shared.quota.DailyQuotaExceededException;
+import io.github.badim1235.trackdrop.track.TrackDetailException;
 import io.github.badim1235.trackdrop.vote.VoteException;
 import java.util.Comparator;
 import java.util.Map;
@@ -85,6 +87,18 @@ public class ApiExceptionHandler {
 
 	@ExceptionHandler(HomeFeedException.class)
 	ResponseEntity<ApiErrorResponse> homeFeed(HomeFeedException exception) {
+		return ResponseEntity.status(exception.getStatus()).body(new ApiErrorResponse(new ApiError(
+			exception.getCode(), exception.getMessage(), Map.of())));
+	}
+
+	@ExceptionHandler(TrackDetailException.class)
+	ResponseEntity<ApiErrorResponse> trackDetail(TrackDetailException exception) {
+		return ResponseEntity.status(exception.getStatus()).body(new ApiErrorResponse(new ApiError(
+			exception.getCode(), exception.getMessage(), Map.of())));
+	}
+
+	@ExceptionHandler(ReportException.class)
+	ResponseEntity<ApiErrorResponse> report(ReportException exception) {
 		return ResponseEntity.status(exception.getStatus()).body(new ApiErrorResponse(new ApiError(
 			exception.getCode(), exception.getMessage(), Map.of())));
 	}

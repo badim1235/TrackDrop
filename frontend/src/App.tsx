@@ -13,6 +13,7 @@ import { useAccount } from './auth/account'
 import { ChartPage } from './catalog/ChartPage'
 import { RecommendPage } from './catalog/RecommendPage'
 import { HomePage, RecentPage } from './home/HomePages'
+import { TrackDetailPage } from './track/TrackDetailPage'
 
 function AccountArea() {
   const location = useLocation()
@@ -71,6 +72,7 @@ function App() {
           <Route path="/" element={<HomePage />} />
           <Route path="/chart" element={<ChartPage />} />
           <Route path="/recent" element={<RecentPage />} />
+          <Route path="/tracks/:trackId" element={<TrackDetailPage />} />
           <Route path="/recommend" element={<RecommendPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/join" element={<JoinPage />} />

@@ -208,6 +208,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/tracks/{trackId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read a registered track with today's rank and viewer state */
+        get: operations["getTrackDetail"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/charts/daily": {
         parameters: {
             query?: never;
@@ -236,6 +253,23 @@ export interface paths {
         put?: never;
         /** Register a new track with its first vote and consume one daily quota */
         post: operations["createRecommendation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/recommendations/{recommendationId}/reports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Report a recommendation comment when the hidden feature is enabled */
+        post: operations["createRecommendationReport"];
         delete?: never;
         options?: never;
         head?: never;
@@ -434,6 +468,64 @@ export interface components {
             hasMore: boolean;
             nextCursor: string | null;
         };
+        TrackDetailResponse: {
+            track: components["schemas"]["TrackDetail"];
+            today: components["schemas"]["TrackToday"];
+            quota: components["schemas"]["DailyQuota"] | null;
+            actions: components["schemas"]["TrackActions"];
+        };
+        TrackDetail: {
+            /** Format: uuid */
+            id: string;
+            title: string;
+            artistName: string;
+            albumName: string | null;
+            /** Format: uri */
+            albumCoverUrl: string | null;
+            releaseYear: number | null;
+            isrc: string | null;
+            explicit: boolean;
+            providerGenreName: string | null;
+            primaryGenre: components["schemas"]["Genre"];
+            genres: components["schemas"]["Genre"][];
+            recommendation: components["schemas"]["TrackRecommendation"];
+            viewer: components["schemas"]["TrackViewer"] | null;
+            preview: components["schemas"]["MusicPreview"];
+            providerReferences: components["schemas"]["TrackProviderReference"][];
+        };
+        TrackRecommendation: {
+            /** Format: uuid */
+            id: string;
+            comment: string | null;
+            commentAvailable: boolean;
+            recommenderNickname: string | null;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        TrackViewer: {
+            hasVotedToday: boolean;
+        };
+        TrackProviderReference: {
+            /** @constant */
+            provider: "APPLE_MUSIC";
+            externalTrackId: string;
+            /** Format: uri */
+            externalUrl: string | null;
+            /** Format: date-time */
+            metadataRefreshedAt: string;
+        };
+        TrackToday: {
+            voteCount: number;
+            overallRank: number | null;
+            genreRank: number | null;
+            /** Format: date-time */
+            asOf: string;
+        };
+        TrackActions: {
+            canVote: boolean;
+            /** @enum {string|null} */
+            reason: "UNAUTHENTICATED" | "ALREADY_VOTED" | "DAILY_LIMIT_EXCEEDED" | null;
+        };
         DailyChartResponse: {
             /** Format: date */
             date: string;
@@ -533,6 +625,22 @@ export interface components {
             created: true;
             /** Format: date */
             votedOn: string;
+        };
+        CreateReportRequest: {
+            /** @enum {string} */
+            reasonCode: "ABUSIVE_LANGUAGE" | "SPAM" | "OTHER";
+            details?: string | null;
+        };
+        CreateReportResponse: {
+            report: components["schemas"]["CreatedReport"];
+        };
+        CreatedReport: {
+            /** Format: uuid */
+            id: string;
+            /** @constant */
+            status: "PENDING";
+            /** Format: date-time */
+            createdAt: string;
         };
         CreateVoteResponse: {
             vote: components["schemas"]["Vote"];
@@ -922,6 +1030,37 @@ export interface operations {
             400: components["responses"]["ValidationError"];
         };
     };
+    getTrackDetail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                trackId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Full track metadata, original recommendation, and today's vote state. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrackDetailResponse"];
+                };
+            };
+            /** @description The track does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
     getDailyChart: {
         parameters: {
             query?: {
@@ -978,6 +1117,47 @@ export interface operations {
             409: components["responses"]["ConflictError"];
             429: components["responses"]["RateLimitError"];
             503: components["responses"]["MusicProviderError"];
+        };
+    };
+    createRecommendationReport: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-XSRF-TOKEN": components["parameters"]["CsrfHeader"];
+            };
+            path: {
+                recommendationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateReportRequest"];
+            };
+        };
+        responses: {
+            /** @description The report was created without changing comment visibility. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreateReportResponse"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            401: components["responses"]["AuthenticationError"];
+            403: components["responses"]["ForbiddenError"];
+            /** @description The feature is disabled or the recommendation does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            409: components["responses"]["ConflictError"];
         };
     };
     createVote: {

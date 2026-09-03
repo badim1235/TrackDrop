@@ -83,7 +83,7 @@ function DiscoveryTrack({
       <DiscoveryArtwork item={item} />
       <div className={styles.homeTrackBody}>
         <div className={styles.trackTitleLine}>
-          <strong>{item.title}</strong>
+          <strong><NavLink className={styles.trackDetailLink} to={`/tracks/${item.id}`}>{item.title}</NavLink></strong>
           {item.explicit ? <span className={styles.explicitBadge}>Explicit</span> : null}
         </div>
         <span className={styles.homeArtist}>{item.artistName}</span>

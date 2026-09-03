@@ -593,6 +593,7 @@ a.loginNotice:hover { color: var(--ink); text-decoration: underline; text-underl
 
 .trackTitleLine { min-width: 0; display: flex; align-items: center; gap: 7px; }
 .trackTitleLine strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 15px; }
+.trackDetailLink:hover { text-decoration: underline; text-underline-offset: 3px; }
 
 .explicitBadge {
   flex: 0 0 auto;
@@ -1013,6 +1014,181 @@ a.loginNotice:hover { color: var(--ink); text-decoration: underline; text-underl
   cursor: pointer;
 }
 
+.trackDetailPage {
+  width: min(940px, 100%);
+  margin: 0 auto;
+  padding: 38px 0 96px;
+}
+
+.detailBackLink {
+  width: fit-content;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 32px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.detailBackLink:hover { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
+
+.detailHero {
+  display: grid;
+  grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
+  align-items: center;
+  gap: 48px;
+  padding-bottom: 46px;
+  border-bottom: 1px solid var(--line-strong);
+}
+
+.detailArtwork,
+.detailArtworkFallback {
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 6px;
+}
+
+.detailArtwork { display: block; object-fit: cover; background: var(--surface); }
+.detailArtworkFallback { display: grid; place-items: center; color: var(--muted); background: var(--surface); }
+.detailIdentity { min-width: 0; }
+.detailIdentity .eyebrow { margin-bottom: 9px; }
+
+.detailTitleLine {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.detailTitleLine h1 {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-size: 46px;
+  font-weight: 600;
+  line-height: 1.14;
+}
+
+.detailTitleLine .explicitBadge { margin-top: 9px; }
+.detailArtist { margin: 14px 0 0; color: var(--ink-soft); font-size: 19px; }
+.detailMetadata { margin: 7px 0 0; color: var(--muted); font-size: 13px; }
+
+.detailGenre {
+  width: fit-content;
+  display: block;
+  margin-top: 16px;
+  padding: 4px 7px;
+  border: 1px solid var(--line-strong);
+  border-radius: 4px;
+  color: var(--ink-soft);
+  font-size: 11px;
+}
+
+.detailPreview {
+  width: min(100%, 390px);
+  height: 32px;
+  display: block;
+  margin-top: 20px;
+  border: 0;
+  border-radius: 4px;
+  background: var(--paper);
+}
+
+.detailPreview::-webkit-media-controls-enclosure,
+.detailPreview::-webkit-media-controls-panel { background: var(--paper); }
+.detailPreview::-webkit-media-controls-overflow-button { display: none; }
+.detailPreviewUnavailable { margin: 20px 0 0; color: var(--muted); font-size: 12px; }
+
+.detailExternalLink {
+  width: fit-content;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 13px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.detailExternalLink:hover { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
+
+.detailStats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  border-bottom: 1px solid var(--line-strong);
+}
+
+.detailStats > div {
+  min-height: 112px;
+  display: grid;
+  align-content: center;
+  gap: 8px;
+  padding: 18px 24px;
+  border-right: 1px solid var(--line);
+}
+
+.detailStats > div:last-child { border-right: 0; }
+.detailStats span { color: var(--muted); font-size: 12px; }
+.detailStats strong { font-size: 25px; }
+
+.detailRecommendation {
+  padding: 42px 0;
+  border-bottom: 1px solid var(--line-strong);
+}
+
+.detailRecommendation h2 { margin: 0; font-size: 23px; }
+.detailRecommendation blockquote { margin: 28px 0 20px; font-size: 22px; line-height: 1.65; }
+.detailHiddenComment { margin: 28px 0 20px; color: var(--muted); font-size: 14px; }
+.detailRecommender { display: flex; align-items: center; gap: 10px; }
+.detailRecommender strong { font-size: 13px; }
+.detailRecommender time { color: var(--muted); font-size: 11px; }
+
+.detailVoteBand {
+  min-height: 112px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  border-bottom: 1px solid var(--line);
+}
+
+.detailVoteBand > div { display: grid; gap: 6px; }
+.detailVoteBand > div strong { font-size: 16px; }
+.detailVoteBand > div span { color: var(--muted); font-size: 12px; }
+.detailVoteBand > a,
+.detailVoteBand > button {
+  min-width: 132px;
+  height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 6px;
+  color: #fcfbf8;
+  background: var(--ink);
+  box-shadow: var(--button-shadow);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.detailVoteBand > button:disabled { color: var(--muted); background: var(--surface); box-shadow: none; cursor: not-allowed; }
+.detailVoteBand > .votedButton:disabled { color: #fcfbf8; background: var(--success); }
+.detailVoteError { margin: 12px 0 0; color: var(--danger); font-size: 12px; text-align: right; }
+
+.detailMessage {
+  min-height: 420px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 10px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.detailMessage strong { color: var(--ink); font-size: 15px; }
+.detailMessage span { font-size: 13px; }
+.detailMessage button { height: 34px; padding: 0 12px; border: 1px solid var(--line-strong); border-radius: 5px; color: var(--ink); background: transparent; cursor: pointer; }
+
 .footer {
   padding: 24px 5vw;
   border-top: 1px solid var(--line);
@@ -1075,6 +1251,19 @@ a.loginNotice:hover { color: var(--ink); text-decoration: underline; text-underl
   .successBanner { align-items: flex-start; flex-direction: column; }
   .accountDetails > div { grid-template-columns: 112px 1fr; gap: 12px; }
   .quotaBand { align-items: flex-start; flex-direction: column; }
+  .trackDetailPage { padding: 26px 0 116px; }
+  .detailBackLink { margin-bottom: 22px; }
+  .detailHero { grid-template-columns: 1fr; gap: 24px; padding-bottom: 32px; }
+  .detailArtwork, .detailArtworkFallback { width: min(100%, 280px); }
+  .detailTitleLine h1 { font-size: 34px; }
+  .detailArtist { font-size: 17px; }
+  .detailStats > div { min-height: 92px; padding: 14px 10px; }
+  .detailStats span { min-height: 30px; }
+  .detailStats strong { font-size: 21px; }
+  .detailRecommendation { padding: 34px 0; }
+  .detailRecommendation blockquote { margin-top: 22px; font-size: 18px; }
+  .detailVoteBand { align-items: stretch; flex-direction: column; padding: 24px 0; }
+  .detailVoteBand > a, .detailVoteBand > button { width: 100%; min-height: 44px; }
   .mobileNav {
     display: block;
     position: fixed;
