@@ -224,11 +224,11 @@ export function HomePage() {
       <section className={styles.intro}>
         <div>
           <p className={styles.eyebrow}>TODAY&apos;S PICKS</p>
-          <h1>오늘 발견한 음악을<br />함께 차트에 <span className={styles.mobileBreak}>올려보세요.</span></h1>
+          <h1>오늘 발견한 음악을 공유해요.</h1>
         </div>
         <NavLink className={styles.primaryAction} to="/recommend">
           <Plus aria-hidden="true" size={19} />
-          곡 추천하기
+          추천하기
         </NavLink>
       </section>
 
@@ -312,7 +312,7 @@ export function RecentPage() {
             disabled={recent.isFetchingNextPage}
             onClick={() => recent.fetchNextPage()}
           >
-            {recent.isFetchingNextPage ? '불러오는 중...' : '더보기 (20곡)'}
+            {recent.isFetchingNextPage ? '불러오는 중...' : '더보기'}
           </button>
         ) : null}
       </section>

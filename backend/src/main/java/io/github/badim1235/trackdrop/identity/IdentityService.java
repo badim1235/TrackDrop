@@ -36,8 +36,10 @@ public class IdentityService {
 		if (existingAccount.isPresent()) {
 			return existingAccount.get();
 		}
-		if (userAccounts.existsByEmailNormalized(normalizedEmail)) {
-			throw IdentityException.emailTaken();
+		var legacyUserId = findUserIdByEmail(normalizedEmail);
+		if (legacyUserId.isPresent()) {
+			reconnectProfile(legacyUserId.get(), id, authenticatedUser, emailVerifiedAt);
+			return userAccounts.findById(id).orElseThrow();
 		}
 
 		for (int attempt = 0; attempt < NICKNAME_ATTEMPTS; attempt++) {
@@ -73,6 +75,37 @@ public class IdentityService {
 		}
 
 		throw new IllegalStateException("Could not allocate a unique public nickname");
+	}
+
+	private java.util.Optional<UUID> findUserIdByEmail(String normalizedEmail) {
+		return jdbcClient.sql("SELECT id FROM users WHERE email_normalized = :email")
+			.param("email", normalizedEmail)
+			.query(UUID.class)
+			.optional();
+	}
+
+	private void reconnectProfile(
+		UUID existingId,
+		UUID supabaseId,
+		SupabaseAuthGateway.AuthenticatedUser authenticatedUser,
+		OffsetDateTime emailVerifiedAt
+	) {
+		jdbcClient.sql("""
+				UPDATE users
+				SET id = :supabaseId,
+					email = :email,
+					email_normalized = :normalizedEmail,
+					email_verified_at = :emailVerifiedAt,
+					updated_at = :now
+				WHERE id = :existingId
+				""")
+			.param("supabaseId", supabaseId)
+			.param("email", authenticatedUser.email())
+			.param("normalizedEmail", IdentityNormalizer.email(authenticatedUser.email()))
+			.param("emailVerifiedAt", emailVerifiedAt)
+			.param("now", OffsetDateTime.now(ZoneOffset.UTC))
+			.param("existingId", existingId)
+			.update();
 	}
 
 	public UserAccount account(UUID userId) {

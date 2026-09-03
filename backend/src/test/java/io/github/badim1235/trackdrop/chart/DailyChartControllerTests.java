@@ -135,10 +135,17 @@ class DailyChartControllerTests {
 			.andExpect(jsonPath("$.items[0].rank").value(1))
 			.andExpect(jsonPath("$.items[0].voteCount").value(2))
 			.andExpect(jsonPath("$.items[0].track.title").value("Beta"))
+			.andExpect(jsonPath("$.items[0].track.comment").value("테스트 한줄평"))
 			.andExpect(jsonPath("$.items[0].hasVotedToday").value(false))
 			.andExpect(jsonPath("$.quota").doesNotExist())
 			.andExpect(jsonPath("$.actions.canVote").value(false));
 
+		insertRecommendationCycle(
+			beta,
+			users.get(3),
+			rock,
+			LocalDate.now(SERVICE_ZONE),
+			"오늘의 새 한줄평");
 		insertVote(users.get(2), alpha, yesterday);
 		insertVote(users.get(3), alpha, yesterday);
 
@@ -148,6 +155,7 @@ class DailyChartControllerTests {
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.items[0].track.id").value(beta.toString()))
 			.andExpect(jsonPath("$.items[0].voteCount").value(2))
+			.andExpect(jsonPath("$.items[0].track.comment").value("테스트 한줄평"))
 			.andExpect(jsonPath("$.items[1].track.id").value(alpha.toString()))
 			.andExpect(jsonPath("$.items[1].voteCount").value(1));
 
@@ -340,23 +348,51 @@ class DailyChartControllerTests {
 		jdbcClient.sql("""
 				INSERT INTO recommendations (
 					id, recommender_user_id, track_id, primary_genre_id,
-					comment, comment_visibility, created_at
+					comment, comment_visibility, recommended_on, created_at
 				)
 				VALUES (
 					:id, :userId, :trackId, :genreId,
-					'테스트 한줄평', 'VISIBLE', :now
+					'테스트 한줄평', 'VISIBLE', :votedOn, :now
 				)
 				""")
 			.param("id", recommendationId)
 			.param("userId", recommenderId)
 			.param("trackId", trackId)
 			.param("genreId", genreId)
+			.param("votedOn", votedOn)
 			.param("now", now)
 			.update();
 		for (UUID voterId : voterIds) {
 			insertVote(voterId, trackId, votedOn);
 		}
 		return trackId;
+	}
+
+	private void insertRecommendationCycle(
+		UUID trackId,
+		UUID recommenderId,
+		UUID genreId,
+		LocalDate recommendedOn,
+		String comment
+	) {
+		jdbcClient.sql("""
+				INSERT INTO recommendations (
+					id, recommender_user_id, track_id, primary_genre_id,
+					comment, comment_visibility, recommended_on, created_at
+				)
+				VALUES (
+					:id, :userId, :trackId, :genreId,
+					:comment, 'VISIBLE', :recommendedOn, :now
+				)
+				""")
+			.param("id", UUID.randomUUID())
+			.param("userId", recommenderId)
+			.param("trackId", trackId)
+			.param("genreId", genreId)
+			.param("comment", comment)
+			.param("recommendedOn", recommendedOn)
+			.param("now", OffsetDateTime.now(ZoneOffset.UTC).minusSeconds(30))
+			.update();
 	}
 
 	private void insertVote(UUID userId, UUID trackId, LocalDate votedOn) {

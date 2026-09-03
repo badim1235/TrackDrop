@@ -89,7 +89,14 @@ class DailyRankingWriter {
 						COUNT(vote.id)::INTEGER AS vote_count
 					FROM votes vote
 					JOIN tracks track ON track.id = vote.track_id
-					JOIN recommendations recommendation ON recommendation.track_id = track.id
+					JOIN LATERAL (
+						SELECT latest.primary_genre_id
+						FROM recommendations latest
+						WHERE latest.track_id = track.id
+						  AND latest.recommended_on <= :rankingDate
+						ORDER BY latest.recommended_on DESC, latest.created_at DESC, latest.id DESC
+						LIMIT 1
+					) recommendation ON TRUE
 					WHERE vote.voted_on = :rankingDate
 					GROUP BY vote.track_id, recommendation.primary_genre_id
 				),

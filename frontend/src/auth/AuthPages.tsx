@@ -129,7 +129,7 @@ export function LoginPage() {
           <LogIn aria-hidden="true" size={18} />
           {mutation.isPending ? '로그인 중...' : '로그인'}
         </button>
-        <p className={styles.authSwitch}>아직 계정이 없나요? <NavLink to={`/join?returnTo=${encodeURIComponent(returnTo)}`}>익명 계정 만들기</NavLink></p>
+        <p className={styles.authSwitch}>아직 계정이 없나요? <NavLink to={`/join?returnTo=${encodeURIComponent(returnTo)}`}>계정 만들기</NavLink></p>
       </form>
     </div>
   )
@@ -211,7 +211,7 @@ export function AccountRecoveryPage() {
               {recoveryForm.formState.errors.email && <span className={styles.fieldError}>{recoveryForm.formState.errors.email.message}</span>}
             </label>
           )}
-          {sent && <p className={styles.recoveryStatus}>메일을 보냈습니다. 받은 편지함을 확인해 주세요.</p>}
+          {sent && <p className={styles.recoveryStatus}>메일을 보냈습니다. 받은 메일함을 확인해 주세요.</p>}
           {serverError && <p className={styles.formError} role="alert">{serverError}</p>}
           {!resetComplete && (
             <button className={styles.submitButton} type="submit" disabled={recoveryMutation.isPending || sent}>
@@ -290,12 +290,12 @@ export function JoinPage() {
         />
         <div className={styles.privacyNote}>
           <LockKeyhole aria-hidden="true" size={18} />
-          <p>이메일은 공개되지 않으며 로그인, 이메일 인증, 비밀번호 복구에만 사용합니다.</p>
+          <p>이메일은 공개되지 않으며 비밀번호 복구에 사용됩니다.</p>
         </div>
         {serverError && <p className={styles.formError} role="alert">{serverError}</p>}
         <button className={styles.submitButton} disabled={mutation.isPending} type="submit">
           <UserPlus aria-hidden="true" size={18} />
-          {mutation.isPending ? '계정 만드는 중...' : '익명 계정 만들기'}
+          {mutation.isPending ? '계정 만드는 중...' : '계정 만들기'}
         </button>
         <p className={styles.authSwitch}>이미 계정이 있나요? <NavLink to={`/login?returnTo=${encodeURIComponent(returnTo)}`}>로그인</NavLink></p>
       </form>

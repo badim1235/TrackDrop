@@ -1,8 +1,9 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Check,
   CircleCheck,
   CircleUserRound,
+  Clock3,
   Disc3,
   ExternalLink,
   Headphones,
@@ -13,14 +14,13 @@ import {
   Send,
   ThumbsUp,
 } from 'lucide-react'
-import { type FormEvent, useState } from 'react'
-import { NavLink } from 'react-router'
+import { type FormEvent, useEffect, useRef, useState } from 'react'
+import { NavLink, useSearchParams } from 'react-router'
 import styles from '../App.module.css'
 import {
   ApiError,
   createRecommendation,
   createVote,
-  fetchGenres,
   type AccountResponse,
   type MusicSearchItem,
   searchMusic,
@@ -46,9 +46,6 @@ function TrackArtwork({ track }: { track: MusicSearchItem }) {
 
 function recommendationError(error: unknown) {
   if (!(error instanceof ApiError)) return '추천을 등록하지 못했습니다. 다시 시도해 주세요.'
-  if (error.code === 'ALREADY_RECOMMENDED') {
-    return '이미 등록된 곡입니다. 추천권은 사용되지 않았습니다.'
-  }
   return error.message
 }
 
@@ -58,23 +55,27 @@ function voteErrorMessage(error: unknown) {
     : '곡을 추천하지 못했습니다. 다시 시도해 주세요.'
 }
 
+function recommendationAvailableMessage(value: string | null) {
+  if (!value) return '잠시 후 다시 추천할 수 있어요.'
+  const [, month, day] = value.split('-').map(Number)
+  return `${month}월 ${day}일부터 다시 추천할 수 있어요.`
+}
+
 export function RecommendPage() {
   const queryClient = useQueryClient()
+  const [searchParams] = useSearchParams()
   const { data: account, isLoading: isAccountLoading } = useAccount()
-  const genres = useQuery({
-    queryKey: ['genres'],
-    queryFn: fetchGenres,
-    staleTime: 30 * 60 * 1000,
-  })
-  const [query, setQuery] = useState('')
+  const [query, setQuery] = useState(() => searchParams.get('query')?.trim() ?? '')
   const [queryError, setQueryError] = useState<string | null>(null)
   const [selectedTrack, setSelectedTrack] = useState<MusicSearchItem | null>(null)
-  const [genreId, setGenreId] = useState('')
   const [comment, setComment] = useState('')
   const [composeError, setComposeError] = useState<string | null>(null)
   const [voteError, setVoteError] = useState<string | null>(null)
   const [votedTrackIds, setVotedTrackIds] = useState<Set<string>>(() => new Set())
+  const [cooldownTrackId, setCooldownTrackId] = useState<string | null>(null)
   const [visibleResultCount, setVisibleResultCount] = useState(10)
+  const composeSectionRef = useRef<HTMLElement>(null)
+  const shouldScrollToCompose = useRef(false)
   const search = useMutation({ mutationFn: searchMusic })
   const create = useMutation({
     mutationFn: createRecommendation,
@@ -119,33 +120,36 @@ export function RecommendPage() {
       setVoteError(voteErrorMessage(error))
     },
   })
-  const suggestedGenreId = selectedTrack && genres.data
-    ? genres.data.items.find(
-      (genre) => genre.displayName.toLocaleLowerCase() === selectedTrack.primaryGenreName?.toLocaleLowerCase(),
-    )?.id ?? genres.data.items.find((genre) => genre.code === 'other')?.id ?? ''
-    : ''
-  const selectedGenreId = genreId || suggestedGenreId
+
+  useEffect(() => {
+    if (!selectedTrack || !shouldScrollToCompose.current) return
+    shouldScrollToCompose.current = false
+    composeSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }, [selectedTrack])
 
   function submitSearch(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const normalized = query.trim().replace(/\s+/g, ' ')
-    if (Array.from(normalized).length < 2 || Array.from(normalized).length > 100) {
-      setQueryError('검색어는 2~100자로 입력해 주세요.')
+    if (Array.from(normalized).length < 1 || Array.from(normalized).length > 100) {
+      setQueryError('검색어는 1~100자로 입력해 주세요.')
       return
     }
     setQueryError(null)
+    shouldScrollToCompose.current = false
     setSelectedTrack(null)
-    setGenreId('')
     setVisibleResultCount(10)
     setVoteError(null)
+    setCooldownTrackId(null)
     create.reset()
     vote.reset()
     search.mutate(normalized)
   }
 
   function selectTrack(track: MusicSearchItem) {
-    if (track.existingTrack.registered) return
-    setSelectedTrack((current) => current?.externalTrackId === track.externalTrackId ? null : track)
+    if (track.existingTrack.action !== 'SELECT') return
+    const deselecting = selectedTrack?.externalTrackId === track.externalTrackId
+    shouldScrollToCompose.current = !deselecting
+    setSelectedTrack(deselecting ? null : track)
     setComposeError(null)
     create.reset()
     vote.reset()
@@ -159,10 +163,6 @@ export function RecommendPage() {
       setComposeError('추천할 곡을 선택해 주세요.')
       return
     }
-	if (!selectedGenreId) {
-      setComposeError('대표 장르를 선택해 주세요.')
-      return
-    }
     if (Array.from(normalizedComment).length < 1 || Array.from(normalizedComment).length > 120) {
       setComposeError('한줄평은 1~120자로 입력해 주세요.')
       return
@@ -171,15 +171,14 @@ export function RecommendPage() {
     create.mutate({
       provider: selectedTrack.provider,
       externalTrackId: selectedTrack.externalTrackId,
-	  primaryGenreId: selectedGenreId,
       comment: normalizedComment,
     })
   }
 
   function resetRecommendation() {
     setQuery('')
+    shouldScrollToCompose.current = false
     setSelectedTrack(null)
-    setGenreId('')
     setComment('')
     search.reset()
     create.reset()
@@ -199,7 +198,7 @@ export function RecommendPage() {
         <section className={styles.recommendSuccess} aria-labelledby="recommend-success-heading">
           <CircleCheck aria-hidden="true" size={38} />
           <p className={styles.eyebrow}>TRACK PICKED</p>
-          <h1 id="recommend-success-heading">추천을 등록했어요.</h1>
+          <h1 id="recommend-success-heading">곡을 추천했어요.</h1>
           <div className={styles.successTrack}>
             {create.data.track.albumCoverUrl ? <img src={create.data.track.albumCoverUrl} alt="" /> : null}
             <div>
@@ -232,7 +231,6 @@ export function RecommendPage() {
         <div className={styles.recommendIcon}><Headphones aria-hidden="true" size={28} /></div>
         <p className={styles.eyebrow}>PICK A TRACK</p>
         <h1>어떤 곡을 추천할까요?</h1>
-        <p className={styles.recommendCopy}>곡이나 아티스트를 검색하고 추천할 한 곡을 골라보세요.</p>
       </header>
 
       <form className={styles.searchShell} onSubmit={submitSearch}>
@@ -268,7 +266,6 @@ export function RecommendPage() {
         <section className={styles.searchResults} aria-labelledby="search-results-heading">
           <div className={styles.resultsHeader}>
             <div>
-              <p className={styles.sectionLabel}>{search.data.storefront} STOREFRONT</p>
               <h2 id="search-results-heading">검색 결과 {search.data.items.length}곡</h2>
             </div>
             <span>관련도순</span>
@@ -284,9 +281,10 @@ export function RecommendPage() {
               {search.data.items.slice(0, visibleResultCount).map((track) => {
                 const selected = selectedTrack?.externalTrackId === track.externalTrackId
                 const existingTrackId = track.existingTrack.trackId
-                const hasVoted = track.existingTrack.hasVotedToday
+                const hasVoted = track.existingTrack.action === 'VOTED'
                   || (existingTrackId ? votedTrackIds.has(existingTrackId) : false)
                 const isVoting = vote.isPending && vote.variables === existingTrackId
+                const waiting = track.existingTrack.action === 'WAIT'
                 return (
                   <li className={selected ? styles.selectedTrack : undefined} key={track.externalTrackId}>
                     <TrackArtwork track={track} />
@@ -298,15 +296,17 @@ export function RecommendPage() {
                       <span>{track.artistName}</span>
                       <small>{[track.albumName, track.releaseYear, track.primaryGenreName].filter(Boolean).join(' · ')}</small>
                     </div>
-                    <div className={styles.trackActions}>
-                      {track.externalUrl ? (
-                        <a href={track.externalUrl} target="_blank" rel="noreferrer">
-                          Apple Music <ExternalLink aria-hidden="true" size={14} />
-                        </a>
-                      ) : null}
-                      {track.existingTrack.registered && existingTrackId ? (
-                        <>
+                    <div className={styles.trackActionColumn}>
+                      <div className={styles.trackActions}>
+                        {track.externalUrl ? (
+                          <a href={track.externalUrl} target="_blank" rel="noreferrer">
+                            Apple Music <ExternalLink aria-hidden="true" size={14} />
+                          </a>
+                        ) : null}
+                        {track.existingTrack.registered && existingTrackId ? (
                           <NavLink to={`/tracks/${existingTrackId}`}>상세</NavLink>
+                        ) : null}
+                        {track.existingTrack.action === 'VOTE' || hasVoted ? (
                           <button
                             className={hasVoted ? styles.votedButton : undefined}
                             type="button"
@@ -323,7 +323,17 @@ export function RecommendPage() {
                             )}
                             {isVoting ? '추천 중' : hasVoted ? '추천 완료' : quotaEmpty ? '추천권 없음' : '추천'}
                           </button>
-                        </>
+                        ) : waiting ? (
+                          <button
+                            className={styles.waitingButton}
+                            type="button"
+                            aria-expanded={cooldownTrackId === track.externalTrackId}
+                            onClick={() => setCooldownTrackId((current) => (
+                              current === track.externalTrackId ? null : track.externalTrackId
+                            ))}
+                          >
+                            <Clock3 aria-hidden="true" size={15} /> 추천 대기
+                          </button>
                       ) : (
                         <button
                           type="button"
@@ -334,6 +344,12 @@ export function RecommendPage() {
                           {selected ? '선택됨' : '선택'}
                         </button>
                       )}
+                      </div>
+                      {waiting && cooldownTrackId === track.externalTrackId ? (
+                        <p className={styles.cooldownNotice} role="status">
+                          {recommendationAvailableMessage(track.existingTrack.recommendationAvailableOn)}
+                        </p>
+                      ) : null}
                     </div>
                   </li>
                 )
@@ -355,7 +371,7 @@ export function RecommendPage() {
       ) : null}
 
       {selectedTrack ? (
-        <section className={styles.composeSection} aria-labelledby="compose-heading">
+        <section ref={composeSectionRef} className={styles.composeSection} aria-labelledby="compose-heading">
           <div className={styles.resultsHeader}>
             <div>
               <h2 id="compose-heading">추천 내용 작성</h2>
@@ -381,22 +397,12 @@ export function RecommendPage() {
           </div>
           <form className={styles.composeForm} onSubmit={submitRecommendation}>
             <label className={styles.field}>
-              대표 장르
-			  <select aria-label="대표 장르" value={selectedGenreId} onChange={(event) => setGenreId(event.target.value)} disabled={genres.isLoading}>
-                <option value="">장르 선택</option>
-                {genres.data?.items.map((genre) => (
-                  <option value={genre.id} key={genre.id}>{genre.displayName}</option>
-                ))}
-              </select>
-              {selectedTrack.primaryGenreName ? <small>Apple 분류: {selectedTrack.primaryGenreName}</small> : null}
-            </label>
-            <label className={styles.field}>
               한줄평
               <textarea
                 aria-label="한줄평"
                 value={comment}
                 maxLength={120}
-                placeholder="이 곡을 추천하는 이유를 남겨보세요."
+                placeholder="남겨주세요"
                 onChange={(event) => setComment(event.target.value)}
               />
               <span className={styles.characterCount}>{Array.from(comment).length}/120</span>
@@ -407,7 +413,7 @@ export function RecommendPage() {
             {quotaEmpty ? <p className={styles.formError}>오늘의 추천권을 모두 사용했습니다.</p> : null}
             <button className={styles.submitButton} type="submit" disabled={create.isPending || quotaEmpty}>
               {create.isPending ? <LoaderCircle className={styles.spinningIcon} aria-hidden="true" size={18} /> : <Send aria-hidden="true" size={17} />}
-              추천 등록
+              추천하기
             </button>
           </form>
         </section>

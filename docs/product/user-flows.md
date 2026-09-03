@@ -229,12 +229,14 @@ flowchart TD
 
 - 미인증 Vote는 로그인 후 해당 상세 화면으로 돌아온다.
 - 이미 오늘 Vote한 곡은 완료 상태와 오늘은 다시 투표할 수 없다는 설명을 표시한다.
+- 현재 차트에 없고 마지막 등록일부터 3일이 지나지 않은 곡은 `추천 대기`와 다시 추천 가능한 날짜를 표시한다.
+- 현재 차트에 없고 3일이 지난 곡은 검색이 채워진 추천 화면으로 이동해 새 한줄평을 작성할 수 있다.
 - 권한을 모두 사용한 경우 Vote 행동을 차단하고 다음 충전 시점을 서비스 시간대로 표시한다.
 - 외부 링크가 하나만 있으면 해당 서비스 버튼을 바로 표시하고, 여러 개면 메뉴로 묶는다.
 
 ### S-05. Recommend
 
-목적: 사용자가 외부 카탈로그에서 정확한 곡을 찾아 대표 장르와 한줄평으로 커뮤니티에 소개한다.
+목적: 사용자가 외부 카탈로그에서 정확한 곡을 찾아 Apple Music 장르와 한줄평으로 커뮤니티에 소개한다.
 
 진입 조건:
 
@@ -249,13 +251,15 @@ stateDiagram-v2
     [*] --> Search
     Search --> SearchResults: 검색 성공
     SearchResults --> Search: 검색어 변경
-    SearchResults --> ExistingTrack: 이미 등록된 Track 선택
-    SearchResults --> Compose: 신규 Track 선택
-    ExistingTrack --> [*]: 상세 이동 또는 오늘 Vote
-    Compose --> Review: 장르·한줄평 유효
+    SearchResults --> CurrentTrack: 오늘 차트에 등록됨
+    SearchResults --> Waiting: 3일 재추천 대기
+    SearchResults --> Compose: 최초 등록 또는 재추천 가능
+    CurrentTrack --> [*]: 상세 이동 또는 오늘 Vote
+    Waiting --> [*]: 상세 이동 또는 가능일 확인
+    Compose --> Review: 한줄평 유효
     Review --> Submitting: 추천 확정
     Submitting --> Success: Recommendation와 최초 Vote 생성
-    Submitting --> ExistingTrack: 동시 등록 충돌
+    Submitting --> CurrentTrack: 동시 등록 충돌
     Submitting --> Review: 검증 또는 일시 오류
     Success --> [*]
 ```
@@ -284,25 +288,24 @@ stateDiagram-v2
 #### Step 2. Compose
 
 - 선택한 Track 요약
-- Apple Music의 원본 장르를 기본값으로 제안하는 대표 장르 단일 선택
-- 제안된 장르가 맞지 않으면 활성 Apple 카탈로그 장르 목록에서 변경 가능
+- Apple Music의 원본 장르 자동 적용
 - 한줄평 1~120자
 - 남은 글자 수
 - 예상 권한: `추천하면 오늘 권한 1회를 사용합니다`
 
-선택한 곡을 바꾸면 장르와 한줄평 draft는 유지하되 제출 전 새 곡에 맞는지 사용자가 다시 확인하도록 한다.
+선택한 곡을 바꾸면 한줄평 draft는 유지하되 제출 전 새 곡에 맞는지 사용자가 다시 확인하도록 한다.
 
 #### Step 3. Review and Submit
 
-- Track, 대표 장르, 한줄평, 제출 후 남을 권한 표시
+- Track, 자동 적용된 Apple Music 장르, 한줄평, 제출 후 남을 권한 표시
 - 한 번의 명시적 확정 행동
 - 제출 중 중복 클릭 방지
-- 성공하면 등록 완료 화면에서 Track, 대표 장르, 한줄평, 오늘 첫 Vote와 남은 권한을 표시
+- 성공하면 등록 완료 화면에서 Track, Apple Music 장르, 한줄평, 오늘 첫 Vote와 남은 권한을 표시
 - 남은 권한이 있으면 다른 곡 추천을 바로 시작할 수 있고 홈으로 이동할 수 있음
 
 동시성 충돌:
 
-검색 당시에는 신규였지만 제출 직전에 다른 사용자가 같은 Track을 등록할 수 있다. 이 경우 두 번째 Recommendation을 만들지 않고 새로 생성된 기존 Track 상세로 연결하며, 사용자의 권한은 소비하지 않는다. 사용자가 원하면 그 Track에 별도 Vote를 수행한다.
+검색 당시에는 등록 가능했지만 제출 직전에 다른 사용자가 같은 Track을 등록할 수 있다. 이 경우 같은 날짜의 두 번째 Recommendation을 만들지 않고 현재 Track 상태를 다시 보여주며, 사용자의 권한은 소비하지 않는다. 사용자가 원하면 현재 차트의 Track에 별도 Vote를 수행한다.
 
 외부 API 장애:
 
@@ -320,7 +323,7 @@ stateDiagram-v2
 - 비밀번호 표시 전환
 - 로그인 상태 유지 checkbox
 - 로그인
-- 익명 계정 만들기
+- 계정 만들기
 
 정책:
 
@@ -341,7 +344,7 @@ stateDiagram-v2
 - 비밀번호
 - 비밀번호 확인
 - 자동 생성될 공개 닉네임에 대한 짧은 설명
-- 이메일은 공개되지 않으며 로그인, 가입 확인과 비밀번호 재설정에 사용한다는 안내
+- 이메일은 공개되지 않으며 비밀번호 복구에 사용된다는 안내
 
 입력 정책:
 
@@ -405,23 +408,24 @@ MVP 콘텐츠:
 
 한 사용자의 여러 탭에서 동시에 Vote해도 각 응답의 서버 기준 남은 권한을 사용한다. 클라이언트의 로컬 카운터는 권한 판단의 근거가 아니다.
 
-### UF-03. 신규 곡 추천 성공
+### UF-03. 신규 곡 또는 재추천 등록 성공
 
 1. 사용자가 `Recommend`에 진입한다.
 2. 곡명과 아티스트로 외부 카탈로그를 검색한다.
 3. 앨범과 버전을 확인해 정확한 결과를 선택한다.
-4. 대표 장르와 한줄평을 작성한다.
+4. 자동 적용된 Apple Music 장르를 확인하고 한줄평을 작성한다.
 5. 검토 화면에서 곡과 소비될 권한을 확인한다.
 6. 서버가 provider 정보 재검증, Track 정규화, 중복 검사, 한도 검사를 수행한다.
 7. Track, Recommendation, 최초 Vote를 필요한 범위에서 원자적으로 저장한다.
 8. 성공한 Track 상세로 이동하고 남은 권한을 갱신한다.
 
-### UF-04. 이미 등록된 곡 추천 시도
+### UF-04. 이미 등록된 곡 검색
 
 1. 사용자가 검색 결과에서 이미 등록된 Track을 선택한다.
-2. 시스템은 최초 추천자의 한줄평과 오늘 Vote 상태를 보여준다.
-3. 사용자는 신규 글을 만들지 않고 Track 상세로 이동한다.
-4. 오늘 아직 Vote하지 않았고 권한이 남았다면 Vote할 수 있다.
+2. 오늘 차트에 있고 아직 Vote하지 않았다면 `추천`, 이미 Vote했다면 `추천 완료`를 표시한다.
+3. 오늘 차트에는 없지만 마지막 등록일부터 3일이 지나지 않았다면 `추천 대기`와 가능일을 표시한다.
+4. 3일이 지났다면 `선택`을 표시하고 새 한줄평으로 Recommendation 회차를 만들 수 있다.
+5. 모든 등록 상태에서 Track 상세로 이동할 수 있다.
 
 ### UF-05. 일일 권한 소진
 
@@ -446,6 +450,7 @@ MVP 콘텐츠:
 | 미인증 | 참여하려면 익명 계정 인증이 필요함 | Login / Join |
 | 일일 한도 소진 | 오늘의 추천 4회를 모두 사용함 | 갱신 시각 확인, 탐색 계속 |
 | 당일 중복 Vote | 이미 오늘 추천한 곡임 | 완료 상태로 동기화 |
+| 곡 재추천 대기 | 마지막 등록일부터 3일이 지나지 않음 | 다시 추천 가능한 날짜 확인 |
 | Track 동시 등록 충돌 | 다른 사용자가 먼저 소개함 | 기존 Track 보기, Vote 선택 |
 | 외부 검색 장애 | 음악 검색을 일시적으로 사용할 수 없음 | draft 유지, 다시 시도 |
 | Preview 없음 | Apple 공식 30초 미리듣기가 제공되지 않음 | Apple의 외부 Track 페이지에서 듣기 |
@@ -469,7 +474,7 @@ MVP 콘텐츠:
 ### 접근성
 
 - 모든 입력에 영구적으로 보이는 label을 제공한다.
-- 키보드로 장르 선택, 날짜 이동, Vote, preview 제어, 외부 링크 접근이 가능해야 한다.
+- 키보드로 장르 탭, 날짜 이동, Vote, preview 제어, 외부 링크 접근이 가능해야 한다.
 - 재생/일시정지와 Vote 완료 상태는 아이콘, 텍스트, 접근성 이름으로 함께 전달한다.
 - `LIVE`, `FINAL`, 오류, 한도 상태를 색상만으로 구분하지 않는다.
 - 비동기 검색 결과와 Vote 결과는 보조기기에 알릴 수 있는 상태 영역을 사용한다.
@@ -487,7 +492,7 @@ MVP 콘텐츠:
 | 과거 차트 | ranking date, final rank, final vote count, snapshot status |
 | Track 카드 | Track 요약, Recommendation 한줄평/닉네임, 대표 Genre, Apple 공식 preview, Apple Track link와 Store attribution |
 | 외부 검색 결과 | Apple Music externalTrackId, ISRC, 곡/앨범/아티스트, 버전 식별 정보, 공식 preview 제공 여부 |
-| 추천 제출 | 선택한 provider 식별자, 대표 genreId, comment |
+| 추천 제출 | 선택한 provider 식별자와 comment. 대표 Genre는 서버가 provider 원본 분류로 결정 |
 | Vote 제출 | 내부 trackId만 전송. userId와 votedOn은 서버가 결정 |
 | 로그인 복귀 | 검증된 내부 return URL, pending intent의 비민감 식별 정보 |
 | 내 계정 | 공개 닉네임, 로그인 이메일, 오늘의 추천 사용량 |

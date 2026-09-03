@@ -13,6 +13,8 @@ import io.github.badim1235.trackdrop.track.TrackDetailException;
 import io.github.badim1235.trackdrop.vote.VoteException;
 import java.util.Comparator;
 import java.util.Map;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -21,6 +23,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 @RestControllerAdvice
 public class ApiExceptionHandler {
+	private static final Logger LOGGER = LoggerFactory.getLogger(ApiExceptionHandler.class);
 	private static final Map<String, Integer> VALIDATION_FIELD_PRIORITY = Map.of(
 		"password", 0,
 		"email", 1);
@@ -101,6 +104,15 @@ public class ApiExceptionHandler {
 	ResponseEntity<ApiErrorResponse> report(ReportException exception) {
 		return ResponseEntity.status(exception.getStatus()).body(new ApiErrorResponse(new ApiError(
 			exception.getCode(), exception.getMessage(), Map.of())));
+	}
+
+	@ExceptionHandler(Exception.class)
+	ResponseEntity<ApiErrorResponse> unexpected(Exception exception) {
+		LOGGER.error("Unexpected API error", exception);
+		return ResponseEntity.internalServerError().body(new ApiErrorResponse(new ApiError(
+			"INTERNAL_SERVER_ERROR",
+			"요청을 처리하지 못했습니다. 다시 시도해 주세요.",
+			Map.of())));
 	}
 
 	public record ApiErrorResponse(ApiError error) {

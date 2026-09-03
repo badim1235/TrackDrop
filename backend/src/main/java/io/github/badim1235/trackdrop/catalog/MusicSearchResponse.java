@@ -1,5 +1,6 @@
 package io.github.badim1235.trackdrop.catalog;
 
+import java.time.LocalDate;
 import java.util.List;
 
 public record MusicSearchResponse(
@@ -34,6 +35,20 @@ public record MusicSearchResponse(
 	) {
 	}
 
-	public record ExistingTrack(boolean registered, String trackId, boolean hasVotedToday) {
+	public record ExistingTrack(
+		boolean registered,
+		String trackId,
+		boolean inCurrentChart,
+		boolean hasVotedToday,
+		LocalDate recommendationAvailableOn,
+		RecommendationAction action
+	) {
+	}
+
+	public enum RecommendationAction {
+		SELECT,
+		VOTE,
+		VOTED,
+		WAIT
 	}
 }

@@ -55,7 +55,7 @@ public class SecurityConfiguration {
 		http
 			.authorizeHttpRequests(authorize -> {
 				authorize.requestMatchers(
-					"/", "/index.html", "/chart", "/recent", "/recommend", "/login", "/join", "/me",
+					"/", "/error", "/index.html", "/chart", "/recent", "/recommend", "/login", "/join", "/me",
 					"/tracks/*",
 					"/recover/id", "/recover/password", "/assets/**", "/favicon.ico").permitAll();
 				authorize.requestMatchers(HttpMethod.GET, "/api/v1/auth/csrf").permitAll();

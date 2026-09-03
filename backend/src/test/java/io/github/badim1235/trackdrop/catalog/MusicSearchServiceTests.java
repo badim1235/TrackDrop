@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
@@ -35,17 +36,73 @@ class MusicSearchServiceTests {
 		assertThat(first.items().getFirst().preview().available()).isTrue();
 		assertThat(first.items().getFirst().existingTrack().registered()).isFalse();
 		assertThat(first.items().getFirst().existingTrack().hasVotedToday()).isFalse();
+		assertThat(first.items().getFirst().existingTrack().action())
+			.isEqualTo(MusicSearchResponse.RecommendationAction.SELECT);
 	}
 
 	@Test
-	void rejectsQueriesOutsideTheConfirmedLength() {
+	void doesNotCacheEmptyProviderResponses() {
+		EmptyThenFoundProvider provider = new EmptyThenFoundProvider();
+		MusicSearchService service = new MusicSearchService(
+			provider,
+			Caffeine.newBuilder().build(),
+			(requestedProvider, ids, userId, votedOn) -> Map.of(),
+			Clock.fixed(Instant.parse("2026-09-01T00:00:00Z"), ZoneOffset.UTC));
+		var userId = java.util.UUID.randomUUID();
+
+		assertThat(service.search("한로로", userId).items()).isEmpty();
+		assertThat(service.search("한로로", userId).items()).hasSize(1);
+		assertThat(provider.callCount).isEqualTo(2);
+	}
+
+	@Test
+	void mapsRegistrationStateToTheConfirmedSearchActions() {
+		FakeProvider provider = new FakeProvider();
+		Clock clock = Clock.fixed(Instant.parse("2026-09-03T00:00:00Z"), ZoneOffset.UTC);
+		var trackId = java.util.UUID.randomUUID();
+		var userId = java.util.UUID.randomUUID();
+
+		MusicSearchService waiting = new MusicSearchService(
+			provider,
+			Caffeine.newBuilder().build(),
+			(requestedProvider, ids, requestedUser, votedOn) -> Map.of(
+				"1234", new CatalogRegistrationLookup.Registration(
+					trackId, false, false, LocalDate.of(2026, 9, 4))),
+			clock);
+		assertThat(waiting.search("한로로", userId).items().getFirst().existingTrack().action())
+			.isEqualTo(MusicSearchResponse.RecommendationAction.WAIT);
+
+		MusicSearchService currentChart = new MusicSearchService(
+			provider,
+			Caffeine.newBuilder().build(),
+			(requestedProvider, ids, requestedUser, votedOn) -> Map.of(
+				"1234", new CatalogRegistrationLookup.Registration(
+					trackId, true, false, LocalDate.of(2026, 9, 6))),
+			clock);
+		assertThat(currentChart.search("한로로", userId).items().getFirst().existingTrack().action())
+			.isEqualTo(MusicSearchResponse.RecommendationAction.VOTE);
+	}
+
+	@Test
+	void acceptsSingleCharacterQueries() {
 		MusicSearchService service = new MusicSearchService(
 			new FakeProvider(),
 			Caffeine.newBuilder().build(),
 			(requestedProvider, ids, userId, votedOn) -> Map.of(),
 			Clock.fixed(Instant.parse("2026-09-01T00:00:00Z"), ZoneOffset.UTC));
 
-		assertThatThrownBy(() -> service.search("a", java.util.UUID.randomUUID()))
+		assertThat(service.search("곡", java.util.UUID.randomUUID()).items()).hasSize(1);
+	}
+
+	@Test
+	void rejectsEmptyQueries() {
+		MusicSearchService service = new MusicSearchService(
+			new FakeProvider(),
+			Caffeine.newBuilder().build(),
+			(requestedProvider, ids, userId, votedOn) -> Map.of(),
+			Clock.fixed(Instant.parse("2026-09-01T00:00:00Z"), ZoneOffset.UTC));
+
+		assertThatThrownBy(() -> service.search(" ", java.util.UUID.randomUUID()))
 			.isInstanceOf(MusicSearchException.class)
 			.extracting(exception -> ((MusicSearchException) exception).getCode())
 			.isEqualTo("SEARCH_QUERY_INVALID");
@@ -65,8 +122,8 @@ class MusicSearchServiceTests {
 			.isEqualTo("RATE_LIMITED");
 	}
 
-	private static final class FakeProvider implements MusicCatalogProvider {
-		private int callCount;
+	private static class FakeProvider implements MusicCatalogProvider {
+		protected int callCount;
 
 		@Override
 		public MusicProvider provider() {
@@ -81,6 +138,10 @@ class MusicSearchServiceTests {
 		@Override
 		public List<MusicCatalogTrack> search(String query) {
 			callCount++;
+			return tracks();
+		}
+
+		protected List<MusicCatalogTrack> tracks() {
 			return List.of(new MusicCatalogTrack(
 				"1234",
 				"Creep",
@@ -98,6 +159,14 @@ class MusicSearchServiceTests {
 		@Override
 		public Optional<MusicCatalogTrack> lookup(String externalTrackId) {
 			return search(externalTrackId).stream().findFirst();
+		}
+	}
+
+	private static final class EmptyThenFoundProvider extends FakeProvider {
+		@Override
+		public List<MusicCatalogTrack> search(String query) {
+			callCount++;
+			return callCount == 1 ? List.of() : tracks();
 		}
 	}
 }

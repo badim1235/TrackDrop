@@ -26,7 +26,7 @@ public class MusicSearchException extends RuntimeException {
 	static MusicSearchException invalidQuery() {
 		return new MusicSearchException(
 			"SEARCH_QUERY_INVALID",
-			"검색어는 2~100자로 입력해 주세요.",
+			"검색어는 1~100자로 입력해 주세요.",
 			HttpStatus.BAD_REQUEST,
 			Map.of(),
 			null);

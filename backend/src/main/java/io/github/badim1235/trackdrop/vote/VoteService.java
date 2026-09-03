@@ -9,6 +9,7 @@ import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -31,13 +32,18 @@ class VoteService {
 
 	@Transactional
 	VoteResponse create(UUID userId, UUID trackId) {
-		if (!trackExists(trackId)) {
-			throw VoteException.trackNotFound();
-		}
-
 		Instant now = clock.instant();
 		LocalDate today = LocalDate.ofInstant(now, SERVICE_ZONE);
 		OffsetDateTime timestamp = OffsetDateTime.ofInstant(now, ZoneOffset.UTC);
+		TrackVoteState state = findTrackState(trackId, today)
+			.orElseThrow(VoteException::trackNotFound);
+		if (!state.inCurrentChart()) {
+			LocalDate availableOn = state.lastRecommendedOn().plusDays(3);
+			if (today.isBefore(availableOn)) {
+				throw VoteException.recommendationCooldown(trackId, availableOn);
+			}
+			throw VoteException.recommendationRequired(trackId);
+		}
 		DailyQuotaSnapshot quotaBefore = quotaService.current(userId);
 		try {
 			jdbcClient.sql("""
@@ -73,10 +79,34 @@ class VoteService {
 			quota);
 	}
 
-	private boolean trackExists(UUID trackId) {
-		return jdbcClient.sql("SELECT EXISTS (SELECT 1 FROM tracks WHERE id = :trackId)")
+	private Optional<TrackVoteState> findTrackState(UUID trackId, LocalDate today) {
+		return jdbcClient.sql("""
+				SELECT
+					latest.recommended_on,
+					EXISTS (
+						SELECT 1 FROM votes current_vote
+						WHERE current_vote.track_id = track.id
+						  AND current_vote.voted_on = :today
+					) AS in_current_chart
+				FROM tracks track
+				JOIN LATERAL (
+					SELECT recommendation.recommended_on
+					FROM recommendations recommendation
+					WHERE recommendation.track_id = track.id
+					ORDER BY recommendation.recommended_on DESC, recommendation.created_at DESC, recommendation.id DESC
+					LIMIT 1
+				) latest ON TRUE
+				WHERE track.id = :trackId
+				FOR UPDATE OF track
+				""")
 			.param("trackId", trackId)
-			.query(Boolean.class)
-			.single();
+			.param("today", today)
+			.query((row, rowNumber) -> new TrackVoteState(
+				row.getObject("recommended_on", LocalDate.class),
+				row.getBoolean("in_current_chart")))
+			.optional();
+	}
+
+	private record TrackVoteState(LocalDate lastRecommendedOn, boolean inCurrentChart) {
 	}
 }

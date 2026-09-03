@@ -4,6 +4,7 @@ import io.github.badim1235.trackdrop.catalog.GenreResponse.Genre;
 import io.github.badim1235.trackdrop.catalog.MusicProvider;
 import io.github.badim1235.trackdrop.shared.quota.DailyQuotaSnapshot;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
@@ -69,6 +70,11 @@ public record TrackDetailResponse(
 	) {
 	}
 
-	public record Actions(boolean canVote, String reason) {
+	public record Actions(
+		boolean canVote,
+		boolean canRecommend,
+		String reason,
+		LocalDate recommendationAvailableOn
+	) {
 	}
 }

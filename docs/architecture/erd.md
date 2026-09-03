@@ -36,8 +36,8 @@ Phase 5에서 기술 스택과 DB 제품을 결정하기 전이므로 물리적�
 | 계정 | Supabase Auth UUID를 `users.id`로 사용하고 TrackDrop DB에는 이메일, 확인 시각과 공개 닉네임만 저장한다. 비밀번호는 저장하지 않는다. |
 | Track | 내부 `tracks`와 provider별 `track_provider_refs`를 분리한다. 외부 ID는 Track의 PK가 아니다. |
 | Artist | MVP에서는 별도 Entity를 만들지 않고 Track의 `artist_name` 표시 문자열로 저장한다. |
-| Genre | Track은 `track_genres`를 통해 여러 장르를 가질 수 있다. 등록자는 활성화된 시스템 장르 목록에서 Recommendation의 대표 장르 하나를 선택한다. |
-| Recommendation | Track당 하나의 영속적인 최초 소개 기록이다. 한줄평을 숨겨도 Track과 Vote 이력은 유지한다. |
+| Genre | Track은 `track_genres`를 통해 여러 장르를 가질 수 있다. Recommendation의 대표 장르는 Apple Music 분류를 활성 시스템 장르에 자동 매칭한다. |
+| Recommendation | Track의 날짜별 소개 회차다. 같은 곡은 마지막 회차에서 3일 후 다시 추천할 수 있으며 한줄평을 숨겨도 Track과 Vote 이력은 유지한다. |
 | Vote | 랭킹의 유일한 원장이다. User, Track, 서비스 날짜를 저장하고 같은 날짜의 동일 Track 중복 Vote를 DB에서 막는다. |
 | 일일 한도 | `daily_recommendation_quotas`의 사용자·날짜 행을 조건부 원자 업데이트해 4회를 넘지 못하게 한다. |
 | Ranking | `daily_rankings.rank`에 Vote 수와 Track 이름을 기준으로 계산한 고유 `ROW_NUMBER`를 저장한다. |
@@ -48,20 +48,20 @@ Phase 5에서 기술 스택과 DB 제품을 결정하기 전이므로 물리적�
 
 ### 4.1 Vote는 Track만 참조한다
 
-Recommendation은 Track당 하나로 고정된다. 등록자는 시스템에 나열된 활성 Genre 중 하나를 대표 장르로 선택한다. 따라서 Vote에 `recommendation_id`, `genre_id`, `track_id`를 모두 중복 저장할 필요가 없다. Vote는 Track을 참조하고, 한줄평과 대표 장르는 Track의 유일한 Recommendation을 통해 조회한다.
+Recommendation은 Track의 추천 회차이며 Vote는 Track을 참조한다. 차트 집계는 해당 서비스 날짜까지 생성된 최신 Recommendation의 대표 장르를 사용하므로 Vote에 `recommendation_id`, `genre_id`, `track_id`를 모두 중복 저장하지 않는다.
 
 장점:
 
 - `UNIQUE(user_id, voted_on, track_id)`로 중복 Vote를 직접 보장한다.
 - Vote의 저장 구조가 작고 집계 기준이 명확하다.
-- Track당 Recommendation 하나라는 도메인 규칙과 일치한다.
+- 재추천 회차가 생겨도 Vote의 저장 구조가 바뀌지 않는다.
 
 Trade-off:
 
 - 장르 집계 시 Recommendation을 join해야 한다.
 - 대표 장르 변경 기능을 나중에 추가하면 진행 중인 오늘 차트의 장르 집계 의미가 바뀔 수 있다.
 
-MVP 등록 API는 활성 Genre 목록에서 대표 장르 하나를 선택하게 한다. 일반 수정 API는 현재 MVP 범위에 추가하지 않지만 ERD가 값을 영구 불변으로 강제하지도 않는다. 향후 변경 기능을 추가할 때는 변경 이후 Vote만 새 장르로 볼지, 당일 전체 Vote를 재분류할지 별도 정책을 먼저 정한다. 완료된 과거 snapshot은 변경하지 않는다.
+MVP 등록 API는 Apple Music 장르를 활성 Genre에 자동 매칭한다. 재추천 시 provider metadata와 장르를 갱신하되 완료된 과거 snapshot은 변경하지 않는다.
 
 ### 4.2 일일 한도는 Vote COUNT로만 검사하지 않는다
 
@@ -86,9 +86,7 @@ quota는 정확성 제어용 중복 데이터다. 모든 성공한 Recommendatio
 
 ### 4.4 Recommendation은 삭제하지 않고 한줄평만 숨긴다
 
-Track당 Recommendation 하나라는 제약을 유지하려면 신고나 운영 조치로 한줄평을 숨겨도 Recommendation 자체는 남아 있어야 한다. `comment_visibility`로 한줄평 노출만 제어하고 Track, Vote, Ranking 이력은 유지한다.
-
-대안인 Recommendation 삭제 후 재등록은 최초 추천자와 대표 장르의 의미가 바뀌고 과거 snapshot 재현을 어렵게 하므로 MVP에서 사용하지 않는다.
+각 Recommendation 회차는 과거 차트와 신고의 근거이므로 삭제하지 않는다. `comment_visibility`로 한줄평 노출만 제어하고 Track, Vote, Ranking 이력은 유지한다.
 
 ### 4.5 ISRC는 고유키로 강제하지 않는다
 
@@ -105,7 +103,7 @@ erDiagram
     USERS ||--o{ DAILY_RECOMMENDATION_QUOTAS : consumes
     USERS ||--o{ CONTENT_REPORTS : submits
 
-    TRACKS ||--|| RECOMMENDATIONS : introduced_by
+    TRACKS ||--o{ RECOMMENDATIONS : introduced_by
     TRACKS ||--o{ TRACK_PROVIDER_REFS : identified_by
     TRACKS ||--o{ TRACK_GENRES : classified_as
     GENRES ||--o{ TRACK_GENRES : contains
@@ -168,10 +166,11 @@ erDiagram
     RECOMMENDATIONS {
         id id PK
         id recommender_user_id FK
-        id track_id FK,UK
+        id track_id FK
         id primary_genre_id FK
         string comment
         string comment_visibility
+        date recommended_on
         instant created_at
     }
 
@@ -344,7 +343,8 @@ MVP의 preview는 Apple이 선택한 공식 30초 구간이다. 시작 위치가
 주요 제약:
 
 - `PRIMARY KEY(track_id, genre_id)`
-- Recommendation 생성 시 선택한 대표 Genre 관계가 없으면 `USER_SELECTED` source로 함께 생성한다.
+- Recommendation 생성 시 Apple Music의 원본 Genre를 시스템 Genre와 매칭하고 `PROVIDER` source로 관계를 생성한다.
+- 일치하는 활성 시스템 Genre가 없으면 `Other`를 사용하며, 사용자는 대표 Genre를 선택하지 않는다.
 
 ### 6.6 recommendations
 
@@ -352,18 +352,20 @@ MVP의 preview는 Apple이 선택한 공식 30초 구간이다. 시작 위치가
 | --- | --- | --- |
 | `id` | Y | PK |
 | `recommender_user_id` | Y | FK -> users |
-| `track_id` | Y | FK -> tracks, Unique |
+| `track_id` | Y | FK -> tracks |
 | `primary_genre_id` | Y | FK -> genres |
 | `comment` | Y | trim 후 1~120자 |
 | `comment_visibility` | Y | `VISIBLE`, `HIDDEN` |
-| `created_at` | Y | 최초 소개 시각, 수정하지 않음 |
+| `recommended_on` | Y | 추천 회차의 `Asia/Seoul` 서비스 날짜 |
+| `created_at` | Y | 추천 회차 생성 시각, 수정하지 않음 |
 
 주요 제약:
 
-- `UNIQUE(track_id)`: Track당 Recommendation 하나
+- `UNIQUE(track_id, recommended_on)`: 한 곡은 같은 서비스 날짜에 한 추천 회차만 생성
+- 마지막 `recommended_on + 3일`부터 새 Recommendation을 만들 수 있으며 Track 행은 재사용한다.
 - `(track_id, primary_genre_id)`는 `track_genres(track_id, genre_id)`를 참조하는 복합 FK
 - `CHECK(comment length between 1 and 120)`에 해당하는 DB 검증
-- 등록 시 `genres.active = true`인 시스템 장르 중 하나만 선택하며 자유 입력 장르는 받지 않는다.
+- 등록 시 provider 원본 분류를 `genres.active = true`인 시스템 장르에 자동 매칭하며 사용자 입력은 받지 않는다.
 - 대표 Genre 수정 endpoint는 MVP에 포함하지 않는다. ERD 자체는 향후 통제된 변경 가능성을 막지 않는다.
 - 한줄평이 숨겨져도 Recommendation과 Track은 삭제하지 않는다.
 
@@ -497,6 +499,7 @@ PK와 Unique Constraint가 만드는 인덱스 외에 다음 인덱스를 권장
 | `votes(user_id, voted_on)` | 사용자별 오늘 Vote 상태 및 quota 감사 |
 | `recommendations(primary_genre_id, track_id)` | 장르별 Vote 집계 join |
 | `recommendations(created_at DESC, id DESC)` | 홈과 최근 등록 목록 |
+| `recommendations(track_id, recommended_on DESC, created_at DESC)` | 최신 회차와 3일 재추천 가능일 조회 |
 | `tracks(isrc)` | ISRC 후보 검색. null과 중복 허용 |
 | `daily_rankings(ranking_date, scope_type, genre_id, rank)` | 과거 Top 50의 20곡 + 30곡 더 보기 |
 | `content_reports(status, created_at)` | 향후 운영 검토 queue |
@@ -539,26 +542,25 @@ WHERE user_id = :userId
 
 동일 Track 중복 Vote라면 Unique Constraint가 INSERT를 거부하고 트랜잭션 전체가 rollback되므로 quota도 소비되지 않는다. 사전 중복 조회는 친절한 오류 메시지를 위해 사용할 수 있지만 정확성의 근거는 아니다.
 
-### 8.3 신규 Recommendation과 최초 Vote
+### 8.3 Recommendation 회차와 최초 Vote
 
 외부 music API 검색과 선택은 DB 트랜잭션 밖에서 수행한다. 최종 제출 시 provider 식별자로 메타데이터를 재검증한 뒤 하나의 DB 트랜잭션에서 다음을 수행한다.
 
-1. `(provider, external_track_id)`로 기존 provider 참조와 Track을 조회한다.
-2. 없으면 Track과 provider 참조를 생성한다. 동시 생성 충돌 시 현재 트랜잭션을 rollback하고 Unique Constraint가 가리키는 기존 Track으로 명령 전체를 재시도한다.
-3. 해당 Track에 Recommendation이 이미 있는지 확인한다.
-4. quota 1회를 원자적으로 소비한다.
-5. `track_genres`에 대표 장르 관계를 생성한다.
-6. Recommendation을 생성한다. `UNIQUE(track_id)` 충돌 시 전체 rollback한다.
-7. 추천자의 최초 Vote를 생성한다.
-8. commit한다.
+1. `(provider, external_track_id)`로 기존 provider 참조와 Track을 조회하고 Track 행을 잠근다.
+2. Track이 없으면 Track과 provider 참조를 생성한다.
+3. 기존 Track이면 최신 `recommended_on`과 오늘 Vote를 확인한다.
+4. 마지막 등록일에서 3일이 지나지 않았으면 `RECOMMENDATION_COOLDOWN`, 오늘 차트에 이미 있으면 `ALREADY_IN_CURRENT_CHART`로 실패한다.
+5. quota 1회를 원자적으로 소비하고 `track_genres` 관계를 보완한다.
+6. 새 Recommendation 회차와 추천자의 최초 Vote를 생성한다.
+7. commit한다.
 
-3번 사전 조회 이후 다른 사용자가 먼저 등록할 수 있으므로 6번 Unique Constraint가 최종 방어선이다. 충돌한 사용자의 quota와 임시 Track 변경은 rollback하며, 트랜잭션 종료 후 기존 Track을 조회해 `ALREADY_RECOMMENDED` 결과로 반환한다.
+Track 행 lock과 `UNIQUE(track_id, recommended_on)`이 동시 재등록을 직렬화한다. 충돌한 요청의 quota와 임시 변경은 모두 rollback한다.
 
 ### 8.4 삭제와 수정 정책
 
 - User는 상태 전환을 사용하며 일반 기능에서 hard delete하지 않는다.
 - Track과 Recommendation은 Vote 또는 Ranking에서 참조된 이후 hard delete하지 않는다.
-- 대표 Genre는 등록 시 활성 시스템 장르에서 선택한다. MVP에는 일반 수정 endpoint를 제공하지 않는다.
+- 대표 Genre는 등록 시 provider 원본 분류로 자동 결정한다. MVP에는 일반 수정 endpoint를 제공하지 않는다.
 - 한줄평은 일반 사용자가 수정·삭제할 수 없다.
 - 운영 숨김은 `comment_visibility=HIDDEN`으로 처리한다.
 - Vote는 취소·수정·삭제하지 않는다.
@@ -573,7 +575,7 @@ WHERE user_id = :userId
 1. 대상 날짜의 `ranking_runs`를 생성하거나 기존 실패 run을 `RUNNING`으로 전환한다.
 2. `votes.voted_on = targetDate`를 Track별로 집계한다.
 3. 전체 scope의 `vote_count`와 `ROW_NUMBER` 기반 `rank`를 계산한다.
-4. Recommendation의 불변 `primary_genre_id`로 장르별 집계를 계산한다.
+4. 대상 날짜까지 생성된 가장 최근 Recommendation의 `primary_genre_id`로 장르별 집계를 계산한다.
 5. 대상 날짜의 미완료 snapshot을 교체하고 새 `daily_rankings`를 저장한다.
 6. 같은 트랜잭션에서 run을 `COMPLETED`로 전환한다.
 
@@ -635,17 +637,18 @@ MVP 도메인 Entity에는 자동 `ON DELETE CASCADE`를 기본값으로 사용�
 1. Supabase Auth UUID, 정규화 이메일과 공개 닉네임은 각각 고유하다.
 2. 공개 응답은 이메일을 노출하지 않는다.
 3. provider와 external Track ID 조합은 고유하다.
-4. Track당 Recommendation은 하나다.
-5. Recommendation의 대표 Genre는 해당 Track의 TrackGenre에 존재한다.
-6. 한 User는 같은 서비스 날짜에 같은 Track에 한 번만 Vote한다.
-7. 한 User의 성공 Vote는 서비스 날짜당 최대 4개다.
-8. Recommendation 생성은 최초 Vote를 반드시 동반한다.
-9. quota 소비와 Vote 생성은 같은 트랜잭션에서 성공하거나 실패한다.
-10. 한줄평 숨김은 Track, Vote, Ranking을 삭제하지 않는다.
-11. 동일 User는 동일 Recommendation을 한 번만 신고한다.
-12. rank는 Vote 수 내림차순과 Track 이름 오름차순을 포함한 결정적 기준으로 `ROW_NUMBER`를 계산한다.
-13. 완료된 날짜의 DailyRanking은 읽기 전용이다.
-14. `COMPLETED` RankingRun에 연결된 snapshot만 사용자에게 노출한다.
+4. Track은 여러 날짜의 Recommendation 회차를 가질 수 있지만 같은 날짜에는 하나만 가진다.
+5. 곡의 Recommendation 회차는 직전 회차 날짜에서 3일이 지난 날부터 만들 수 있다.
+6. Recommendation의 대표 Genre는 해당 Track의 TrackGenre에 존재한다.
+7. 한 User는 같은 서비스 날짜에 같은 Track에 한 번만 Vote한다.
+8. 한 User의 성공 Vote는 서비스 날짜당 최대 4개다.
+9. Recommendation 생성은 해당 회차의 최초 Vote를 반드시 동반한다.
+10. quota 소비와 Vote 생성은 같은 트랜잭션에서 성공하거나 실패한다.
+11. 한줄평 숨김은 Track, Vote, Ranking을 삭제하지 않는다.
+12. 동일 User는 동일 Recommendation을 한 번만 신고한다.
+13. rank는 Vote 수 내림차순과 Track 이름 오름차순을 포함한 결정적 기준으로 `ROW_NUMBER`를 계산한다.
+14. 완료된 날짜의 DailyRanking은 읽기 전용이다.
+15. `COMPLETED` RankingRun에 연결된 snapshot만 사용자에게 노출한다.
 
 ## 13. ERD에서 제외한 항목
 
@@ -667,21 +670,21 @@ MVP 도메인 Entity에는 자동 `ON DELETE CASCADE`를 기본값으로 사용�
 - 회원가입 요청은 `email`, `password`를 받고 이메일 확인 후 최초 로그인 시 공개 닉네임을 생성한다.
 - 공개 User 응답과 본인 Account 응답을 분리한다.
 - 외부 검색 결과와 내부 Track 응답을 서로 다른 schema로 정의한다.
-- Recommendation 생성은 provider 식별자, 대표 `genreId`, 한줄평만 받는다.
+- Recommendation 생성은 provider 식별자와 한줄평만 받으며 대표 Genre는 서버가 결정한다.
 - Vote 생성은 `trackId`만 받고 user와 날짜는 서버가 결정한다.
 - quota 응답은 `limit=4`, `used`, `remaining`, `resetAt`을 제공한다.
 - 오늘 차트는 live projection, 과거 차트는 completed snapshot만 반환한다.
 - 과거 차트 route에는 Vote 명령을 연결하지 않는다.
 - 과거 차트의 더 보기는 고유 `rank`에 대응하는 안정적인 cursor 계약을 사용한다.
-- 동시 Track 등록은 500 오류가 아니라 `ALREADY_RECOMMENDED` 도메인 결과로 반환한다.
+- 동시 Track 등록은 500 오류가 아니라 `RECOMMENDATION_COOLDOWN` 또는 `ALREADY_IN_CURRENT_CHART` 도메인 결과로 반환한다.
 - 신고 endpoint는 feature flag가 꺼지면 비활성 응답을 반환한다.
 
 ## 15. 데이터 모델 결정
 
 승인된 정책:
 
-1. Track당 Recommendation을 영구히 하나만 유지하고, 한줄평 숨김 후에도 재등록을 허용하지 않는다.
-2. 등록자는 시스템의 활성 Genre 목록에서 대표 장르 하나를 선택하며 자유 입력하지 않는다.
+1. 같은 곡은 마지막 추천 회차의 KST 날짜에서 3일이 지난 날부터 다시 등록할 수 있다.
+2. 대표 장르는 Apple Music 분류를 시스템 장르에 자동 매칭하며 사용자가 선택하지 않는다.
 3. Vote 취소를 MVP에서 제공하지 않는다.
 4. Supabase Auth UUID와 이메일을 각각 계정당 Unique로 제한한다.
 5. 한줄평 신고 대상을 Recommendation으로 한정한다.

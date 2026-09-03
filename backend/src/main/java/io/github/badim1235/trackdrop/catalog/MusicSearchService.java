@@ -5,6 +5,7 @@ import io.github.badim1235.trackdrop.catalog.CatalogRegistrationLookup.Registrat
 import io.github.badim1235.trackdrop.catalog.MusicSearchResponse.ExistingTrack;
 import io.github.badim1235.trackdrop.catalog.MusicSearchResponse.MusicSearchItem;
 import io.github.badim1235.trackdrop.catalog.MusicSearchResponse.Preview;
+import io.github.badim1235.trackdrop.catalog.MusicSearchResponse.RecommendationAction;
 import java.text.Normalizer;
 import java.time.Clock;
 import java.time.LocalDate;
@@ -40,27 +41,35 @@ public class MusicSearchService {
 	public MusicSearchResponse search(String rawQuery, UUID userId) {
 		String query = normalize(rawQuery);
 		int length = query.codePointCount(0, query.length());
-		if (length < 2 || length > 100) {
+		if (length < 1 || length > 100) {
 			throw MusicSearchException.invalidQuery();
 		}
 
 		String cacheKey = provider.storefront() + ':' + query.toLowerCase(Locale.ROOT);
-		List<MusicCatalogTrack> tracks = cache.get(cacheKey, ignored -> provider.search(query));
+		List<MusicCatalogTrack> tracks = cache.getIfPresent(cacheKey);
+		if (tracks == null) {
+			tracks = provider.search(query);
+			if (!tracks.isEmpty()) {
+				cache.put(cacheKey, tracks);
+			}
+		}
+		LocalDate today = LocalDate.now(clock.withZone(SERVICE_ZONE));
 		Map<String, Registration> registeredTracks = registrations.find(
 			provider.provider(),
 			tracks.stream().map(MusicCatalogTrack::externalTrackId).toList(),
 			userId,
-			LocalDate.now(clock.withZone(SERVICE_ZONE)));
+			today);
 		return new MusicSearchResponse(
 			provider.provider(),
 			provider.storefront(),
 			ATTRIBUTION,
-			tracks.stream().map(track -> toResponse(track, registeredTracks)).toList());
+			tracks.stream().map(track -> toResponse(track, registeredTracks, today)).toList());
 	}
 
 	private MusicSearchItem toResponse(
 		MusicCatalogTrack track,
-		Map<String, Registration> registeredTracks
+		Map<String, Registration> registeredTracks,
+		LocalDate today
 	) {
 		Registration registration = registeredTracks.get(track.externalTrackId());
 		return new MusicSearchItem(
@@ -84,7 +93,25 @@ public class MusicSearchService {
 			new ExistingTrack(
 				registration != null,
 				registration == null ? null : registration.trackId().toString(),
-				registration != null && registration.hasVotedToday()));
+				registration != null && registration.inCurrentChart(),
+				registration != null && registration.hasVotedToday(),
+				registration == null ? null : registration.recommendationAvailableOn(),
+				action(registration, today)));
+	}
+
+	private static RecommendationAction action(Registration registration, LocalDate today) {
+		if (registration == null) {
+			return RecommendationAction.SELECT;
+		}
+		if (registration.hasVotedToday()) {
+			return RecommendationAction.VOTED;
+		}
+		if (registration.inCurrentChart()) {
+			return RecommendationAction.VOTE;
+		}
+		return today.isBefore(registration.recommendationAvailableOn())
+			? RecommendationAction.WAIT
+			: RecommendationAction.SELECT;
 	}
 
 	private static String normalize(String value) {

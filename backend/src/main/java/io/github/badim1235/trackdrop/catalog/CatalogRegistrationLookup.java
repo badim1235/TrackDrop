@@ -13,6 +13,11 @@ interface CatalogRegistrationLookup {
 		LocalDate votedOn
 	);
 
-	record Registration(UUID trackId, boolean hasVotedToday) {
+	record Registration(
+		UUID trackId,
+		boolean inCurrentChart,
+		boolean hasVotedToday,
+		LocalDate recommendationAvailableOn
+	) {
 	}
 }

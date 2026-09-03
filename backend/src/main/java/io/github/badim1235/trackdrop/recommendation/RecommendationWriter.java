@@ -44,56 +44,60 @@ class RecommendationWriter {
 		UUID userId,
 		MusicProvider provider,
 		MusicCatalogTrack catalogTrack,
-		UUID primaryGenreId,
 		String comment
 	) {
-		Genre genre = activeGenre(primaryGenreId)
-			.orElseThrow(RecommendationException::genreNotFound);
-		findExisting(provider, catalogTrack.externalTrackId())
-			.ifPresent(existing -> {
-				throw RecommendationException.alreadyRecommended(
-					existing.trackId(), existing.recommendationId());
-			});
-
+		Genre genre = activeProviderGenre(catalogTrack.primaryGenreName())
+			.orElseThrow(RecommendationException::providerGenreUnavailable);
 		Instant now = clock.instant();
 		OffsetDateTime timestamp = OffsetDateTime.ofInstant(now, ZoneOffset.UTC);
 		LocalDate today = LocalDate.ofInstant(now, SERVICE_ZONE);
-		UUID trackId = UUID.randomUUID();
+		Optional<ExistingRecommendation> existing = findExisting(
+			provider, catalogTrack.externalTrackId());
+		UUID trackId = existing.map(ExistingRecommendation::trackId).orElseGet(UUID::randomUUID);
 		UUID recommendationId = UUID.randomUUID();
 
-		insertTrack(trackId, catalogTrack, timestamp);
-		int providerRefCreated = insertProviderRef(trackId, provider, catalogTrack, timestamp);
-		if (providerRefCreated == 0) {
-			ExistingRecommendation existing = findExisting(provider, catalogTrack.externalTrackId())
-				.orElseThrow(IllegalStateException::new);
-			throw RecommendationException.alreadyRecommended(
-				existing.trackId(), existing.recommendationId());
+		if (existing.isPresent()) {
+			ensureRecommendationAvailable(existing.get(), today);
+			refreshTrack(trackId, catalogTrack, timestamp);
+			refreshProviderRef(trackId, provider, catalogTrack, timestamp);
+		} else {
+			insertTrack(trackId, catalogTrack, timestamp);
+			int providerRefCreated = insertProviderRef(trackId, provider, catalogTrack, timestamp);
+			if (providerRefCreated == 0) {
+				ExistingRecommendation concurrent = findExisting(provider, catalogTrack.externalTrackId())
+					.orElseThrow(IllegalStateException::new);
+				ensureRecommendationAvailable(concurrent, today);
+				throw RecommendationException.alreadyInCurrentChart(
+					concurrent.trackId(), concurrent.recommendationId());
+			}
 		}
 
 		DailyQuotaSnapshot quota = quotaService.consume(userId);
 		jdbcClient.sql("""
 				INSERT INTO track_genres (track_id, genre_id, source, created_at)
-				VALUES (:trackId, :genreId, 'USER_SELECTED', :now)
+				VALUES (:trackId, :genreId, 'PROVIDER', :now)
+				ON CONFLICT (track_id, genre_id) DO NOTHING
 				""")
 			.param("trackId", trackId)
-			.param("genreId", primaryGenreId)
+			.param("genreId", genre.id())
 			.param("now", timestamp)
 			.update();
 		jdbcClient.sql("""
 				INSERT INTO recommendations (
 					id, recommender_user_id, track_id, primary_genre_id,
-					comment, comment_visibility, created_at
+					comment, comment_visibility, recommended_on, created_at
 				)
 				VALUES (
 					:id, :userId, :trackId, :genreId,
-					:comment, 'VISIBLE', :now
+					:comment, 'VISIBLE', :today, :now
 				)
 				""")
 			.param("id", recommendationId)
 			.param("userId", userId)
 			.param("trackId", trackId)
-			.param("genreId", primaryGenreId)
+			.param("genreId", genre.id())
 			.param("comment", comment)
+			.param("today", today)
 			.param("now", timestamp)
 			.update();
 		jdbcClient.sql("""
@@ -127,13 +131,20 @@ class RecommendationWriter {
 			quota);
 	}
 
-	private Optional<Genre> activeGenre(UUID genreId) {
+	private Optional<Genre> activeProviderGenre(String providerGenreName) {
+		String normalizedName = providerGenreName == null ? "" : providerGenreName.strip();
 		return jdbcClient.sql("""
 				SELECT id, code, display_name, sort_order
 				FROM genres
-				WHERE id = :id AND active = TRUE
+				WHERE active = TRUE
+				  AND (LOWER(display_name) = LOWER(:providerGenreName) OR code = 'other')
+				ORDER BY CASE
+				  WHEN LOWER(display_name) = LOWER(:providerGenreName) THEN 0
+				  ELSE 1
+				END
+				LIMIT 1
 				""")
-			.param("id", genreId)
+			.param("providerGenreName", normalizedName)
 			.query((row, rowNumber) -> new Genre(
 				row.getObject("id", UUID.class),
 				row.getString("code"),
@@ -147,19 +158,107 @@ class RecommendationWriter {
 		String externalTrackId
 	) {
 		return jdbcClient.sql("""
-				SELECT provider_ref.track_id, recommendation.id AS recommendation_id
+				SELECT
+					provider_ref.track_id,
+					recommendation.id AS recommendation_id,
+					recommendation.recommended_on
 				FROM track_provider_refs provider_ref
-				LEFT JOIN recommendations recommendation
-				  ON recommendation.track_id = provider_ref.track_id
+				JOIN tracks track ON track.id = provider_ref.track_id
+				JOIN LATERAL (
+					SELECT latest.id, latest.recommended_on
+					FROM recommendations latest
+					WHERE latest.track_id = provider_ref.track_id
+					ORDER BY latest.recommended_on DESC, latest.created_at DESC, latest.id DESC
+					LIMIT 1
+				) recommendation ON TRUE
 				WHERE provider_ref.provider = :provider
 				  AND provider_ref.external_track_id = :externalTrackId
+				FOR UPDATE OF track
 				""")
 			.param("provider", provider.name())
 			.param("externalTrackId", externalTrackId)
 			.query((row, rowNumber) -> new ExistingRecommendation(
 				row.getObject("track_id", UUID.class),
-				row.getObject("recommendation_id", UUID.class)))
+				row.getObject("recommendation_id", UUID.class),
+				row.getObject("recommended_on", LocalDate.class)))
 			.optional();
+	}
+
+	private void ensureRecommendationAvailable(ExistingRecommendation existing, LocalDate today) {
+		if (isInCurrentChart(existing.trackId(), today)) {
+			throw RecommendationException.alreadyInCurrentChart(
+				existing.trackId(), existing.recommendationId());
+		}
+		LocalDate availableOn = existing.recommendedOn().plusDays(3);
+		if (today.isBefore(availableOn)) {
+			throw RecommendationException.recommendationCooldown(
+				existing.trackId(), existing.recommendationId(), availableOn);
+		}
+	}
+
+	private boolean isInCurrentChart(UUID trackId, LocalDate today) {
+		return jdbcClient.sql("""
+				SELECT EXISTS (
+					SELECT 1 FROM votes
+					WHERE track_id = :trackId AND voted_on = :today
+				)
+				""")
+			.param("trackId", trackId)
+			.param("today", today)
+			.query(Boolean.class)
+			.single();
+	}
+
+	private void refreshTrack(
+		UUID trackId,
+		MusicCatalogTrack track,
+		OffsetDateTime timestamp
+	) {
+		jdbcClient.sql("""
+				UPDATE tracks
+				SET title = :title,
+					artist_name = :artistName,
+					album_name = :albumName,
+					album_cover_url = :albumCoverUrl,
+					release_year = :releaseYear,
+					isrc = :isrc,
+					explicit = :explicit,
+					provider_genre_name = :providerGenreName,
+					updated_at = :now
+				WHERE id = :trackId
+				""")
+			.param("trackId", trackId)
+			.param("title", track.title())
+			.param("artistName", track.artistName())
+			.param("albumName", track.albumName())
+			.param("albumCoverUrl", track.albumCoverUrl())
+			.param("releaseYear", track.releaseYear())
+			.param("isrc", track.isrc())
+			.param("explicit", track.explicit())
+			.param("providerGenreName", track.primaryGenreName())
+			.param("now", timestamp)
+			.update();
+	}
+
+	private void refreshProviderRef(
+		UUID trackId,
+		MusicProvider provider,
+		MusicCatalogTrack track,
+		OffsetDateTime timestamp
+	) {
+		jdbcClient.sql("""
+				UPDATE track_provider_refs
+				SET external_url = :externalUrl,
+					preview_url = :previewUrl,
+					metadata_refreshed_at = :now
+				WHERE track_id = :trackId AND provider = :provider
+				""")
+			.param("trackId", trackId)
+			.param("provider", provider.name())
+			.param("externalUrl", track.externalUrl())
+			.param("previewUrl", track.previewUrl())
+			.param("now", timestamp)
+			.update();
 	}
 
 	private void insertTrack(
@@ -219,6 +318,10 @@ class RecommendationWriter {
 			.update();
 	}
 
-	private record ExistingRecommendation(UUID trackId, UUID recommendationId) {
+	private record ExistingRecommendation(
+		UUID trackId,
+		UUID recommendationId,
+		LocalDate recommendedOn
+	) {
 	}
 }

@@ -35,12 +35,26 @@ final class JdbcCatalogRegistrationLookup implements CatalogRegistrationLookup {
 				  provider_ref.track_id,
 				  EXISTS (
 				    SELECT 1
+				    FROM votes current_vote
+				    WHERE current_vote.track_id = provider_ref.track_id
+				      AND current_vote.voted_on = :votedOn
+				  ) AS in_current_chart,
+				  EXISTS (
+				    SELECT 1
 				    FROM votes vote
 				    WHERE vote.track_id = provider_ref.track_id
 				      AND vote.user_id = :userId
 				      AND vote.voted_on = :votedOn
-				  ) AS has_voted_today
+				  ) AS has_voted_today,
+				  latest.recommended_on + 3 AS recommendation_available_on
 				FROM track_provider_refs provider_ref
+				JOIN LATERAL (
+				  SELECT recommendation.recommended_on
+				  FROM recommendations recommendation
+				  WHERE recommendation.track_id = provider_ref.track_id
+				  ORDER BY recommendation.recommended_on DESC, recommendation.created_at DESC, recommendation.id DESC
+				  LIMIT 1
+				) latest ON TRUE
 				WHERE provider_ref.provider = :provider
 				  AND provider_ref.external_track_id IN (:externalTrackIds)
 				""")
@@ -52,7 +66,9 @@ final class JdbcCatalogRegistrationLookup implements CatalogRegistrationLookup {
 				row.getString("external_track_id"),
 				new Registration(
 					row.getObject("track_id", UUID.class),
-					row.getBoolean("has_voted_today"))))
+					row.getBoolean("in_current_chart"),
+					row.getBoolean("has_voted_today"),
+					row.getObject("recommendation_available_on", LocalDate.class))))
 			.list()
 			.forEach(entry -> registrations.put(entry.getKey(), entry.getValue()));
 		return Map.copyOf(registrations);

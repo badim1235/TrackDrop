@@ -83,6 +83,46 @@ class TrackDetailControllerTests {
 	}
 
 	@Test
+	void showsTheCooldownDateWhenTheTrackIsNotInTodaysChart() throws Exception {
+		List<UUID> users = createUsers(2);
+		UUID trackId = insertTrack("Cooling Detail", genreId("rock"), users.getFirst(), List.of());
+		LocalDate today = LocalDate.now(SERVICE_ZONE);
+		jdbcClient.sql("UPDATE recommendations SET recommended_on = :date WHERE track_id = :trackId")
+			.param("date", today.minusDays(1))
+			.param("trackId", trackId)
+			.update();
+		TrackDropPrincipal principal = new TrackDropPrincipal(
+			users.get(1), "viewer@example.com", AccountStatus.ACTIVE);
+
+		mockMvc.perform(get("/api/v1/tracks/{trackId}", trackId).with(user(principal)))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.actions.canVote").value(false))
+			.andExpect(jsonPath("$.actions.canRecommend").value(false))
+			.andExpect(jsonPath("$.actions.reason").value("RECOMMENDATION_COOLDOWN"))
+			.andExpect(jsonPath("$.actions.recommendationAvailableOn")
+				.value(today.plusDays(2).toString()));
+	}
+
+	@Test
+	void directsAnEligibleOldTrackToANewRecommendationCycle() throws Exception {
+		List<UUID> users = createUsers(2);
+		UUID trackId = insertTrack("Eligible Detail", genreId("rock"), users.getFirst(), List.of());
+		LocalDate today = LocalDate.now(SERVICE_ZONE);
+		jdbcClient.sql("UPDATE recommendations SET recommended_on = :date WHERE track_id = :trackId")
+			.param("date", today.minusDays(3))
+			.param("trackId", trackId)
+			.update();
+		TrackDropPrincipal principal = new TrackDropPrincipal(
+			users.get(1), "viewer@example.com", AccountStatus.ACTIVE);
+
+		mockMvc.perform(get("/api/v1/tracks/{trackId}", trackId).with(user(principal)))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.actions.canVote").value(false))
+			.andExpect(jsonPath("$.actions.canRecommend").value(true))
+			.andExpect(jsonPath("$.actions.reason").doesNotExist());
+	}
+
+	@Test
 	void returnsTrackNotFoundForAnUnknownId() throws Exception {
 		mockMvc.perform(get("/api/v1/tracks/{trackId}", UUID.randomUUID()))
 			.andExpect(status().isNotFound())

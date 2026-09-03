@@ -1,5 +1,6 @@
 package io.github.badim1235.trackdrop.recommendation;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -14,6 +15,8 @@ import io.github.badim1235.trackdrop.catalog.MusicProvider;
 import io.github.badim1235.trackdrop.identity.SupabaseAuthGateway;
 import jakarta.servlet.http.Cookie;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -22,6 +25,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
@@ -30,10 +34,13 @@ import org.springframework.test.web.servlet.MvcResult;
 @SpringBootTest
 @AutoConfigureMockMvc
 class RecommendationControllerTests {
-	private static final String ROCK_GENRE_ID = "10000000-0000-0000-0000-000000000020";
+	private static final ZoneId SERVICE_ZONE = ZoneId.of("Asia/Seoul");
 
 	@Autowired
 	private MockMvc mockMvc;
+
+	@Autowired
+	private JdbcClient jdbcClient;
 
 	@MockitoBean
 	private MusicCatalogLookupService catalogLookup;
@@ -66,10 +73,35 @@ class RecommendationControllerTests {
 		mockMvc.perform(get("/api/v1/me").cookie(session))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.quota.used").value(1));
+
+		String genreSource = jdbcClient.sql("""
+				SELECT track_genre.source
+				FROM track_genres track_genre
+				JOIN track_provider_refs provider_ref ON provider_ref.track_id = track_genre.track_id
+				WHERE provider_ref.provider = 'APPLE_MUSIC'
+				  AND provider_ref.external_track_id = '1828393595'
+				""")
+			.query(String.class)
+			.single();
+		assertThat(genreSource).isEqualTo("PROVIDER");
 	}
 
 	@Test
-	void rejectsDuplicateTrackWithoutConsumingAnotherQuota() throws Exception {
+	void fallsBackToOtherWhenAppleGenreIsNotInTheActiveGenreList() throws Exception {
+		Cookie session = signUp();
+		stubTrack("4828393595", "Unmapped Track", "Vocal");
+
+		mockMvc.perform(post("/api/v1/recommendations")
+				.cookie(session).with(csrf())
+				.contentType(MediaType.APPLICATION_JSON)
+				.content(request("4828393595", "분류되지 않은 장르도 추천합니다.")))
+			.andExpect(status().isCreated())
+			.andExpect(jsonPath("$.track.primaryGenreName").value("Vocal"))
+			.andExpect(jsonPath("$.recommendation.primaryGenre.code").value("other"));
+	}
+
+	@Test
+	void rejectsAnotherRecommendationForATrackInTheCurrentChart() throws Exception {
 		Cookie session = signUp();
 		stubTrack("2828393595", "Duplicate Track");
 
@@ -84,11 +116,88 @@ class RecommendationControllerTests {
 				.contentType(MediaType.APPLICATION_JSON)
 				.content(request("2828393595", "두 번째 한줄평입니다.")))
 			.andExpect(status().isConflict())
-			.andExpect(jsonPath("$.error.code").value("ALREADY_RECOMMENDED"))
+			.andExpect(jsonPath("$.error.code").value("ALREADY_IN_CURRENT_CHART"))
 			.andExpect(jsonPath("$.error.details.quotaConsumed").value(false));
 
 		mockMvc.perform(get("/api/v1/me").cookie(session))
 			.andExpect(jsonPath("$.quota.used").value(1));
+	}
+
+	@Test
+	void rejectsTrackDuringTheThreeDayCooldownWithoutConsumingAnotherQuota() throws Exception {
+		Cookie session = signUp();
+		String externalTrackId = "3828393595";
+		stubTrack(externalTrackId, "Cooling Track");
+
+		MvcResult first = mockMvc.perform(post("/api/v1/recommendations")
+				.cookie(session).with(csrf())
+				.contentType(MediaType.APPLICATION_JSON)
+				.content(request(externalTrackId, "첫 번째 한줄평입니다.")))
+			.andExpect(status().isCreated())
+			.andReturn();
+		String trackId = com.jayway.jsonpath.JsonPath.read(
+			first.getResponse().getContentAsString(), "$.track.id");
+		LocalDate today = LocalDate.now(SERVICE_ZONE);
+		jdbcClient.sql("UPDATE votes SET voted_on = :past WHERE track_id = :trackId")
+			.param("past", today.minusDays(1))
+			.param("trackId", UUID.fromString(trackId))
+			.update();
+
+		mockMvc.perform(post("/api/v1/recommendations")
+				.cookie(session).with(csrf())
+				.contentType(MediaType.APPLICATION_JSON)
+				.content(request(externalTrackId, "두 번째 한줄평입니다.")))
+			.andExpect(status().isConflict())
+			.andExpect(jsonPath("$.error.code").value("RECOMMENDATION_COOLDOWN"))
+			.andExpect(jsonPath("$.error.details.recommendationAvailableOn")
+				.value(today.plusDays(3).toString()))
+			.andExpect(jsonPath("$.error.details.quotaConsumed").value(false));
+
+		mockMvc.perform(get("/api/v1/me").cookie(session))
+			.andExpect(jsonPath("$.quota.used").value(1));
+	}
+
+	@Test
+	void allowsTheSameTrackAgainOnTheThirdDayAndReusesItsTrackRecord() throws Exception {
+		Cookie firstRecommender = signUp();
+		Cookie nextRecommender = signUp();
+		String externalTrackId = "5828393595";
+		stubTrack(externalTrackId, "Returning Track");
+
+		MvcResult first = mockMvc.perform(post("/api/v1/recommendations")
+				.cookie(firstRecommender).with(csrf())
+				.contentType(MediaType.APPLICATION_JSON)
+				.content(request(externalTrackId, "첫 번째 한줄평입니다.")))
+			.andExpect(status().isCreated())
+			.andReturn();
+		String trackId = com.jayway.jsonpath.JsonPath.read(
+			first.getResponse().getContentAsString(), "$.track.id");
+		LocalDate today = LocalDate.now(SERVICE_ZONE);
+		jdbcClient.sql("UPDATE recommendations SET recommended_on = :past WHERE track_id = :trackId")
+			.param("past", today.minusDays(3))
+			.param("trackId", UUID.fromString(trackId))
+			.update();
+		jdbcClient.sql("UPDATE votes SET voted_on = :past WHERE track_id = :trackId")
+			.param("past", today.minusDays(3))
+			.param("trackId", UUID.fromString(trackId))
+			.update();
+
+		mockMvc.perform(post("/api/v1/recommendations")
+				.cookie(nextRecommender).with(csrf())
+				.contentType(MediaType.APPLICATION_JSON)
+				.content(request(externalTrackId, "사흘 뒤 다시 추천합니다.")))
+			.andExpect(status().isCreated())
+			.andExpect(jsonPath("$.track.id").value(trackId))
+			.andExpect(jsonPath("$.recommendation.comment").value("사흘 뒤 다시 추천합니다."));
+
+		assertThat(jdbcClient.sql("SELECT COUNT(*) FROM tracks WHERE id = :trackId")
+			.param("trackId", UUID.fromString(trackId))
+			.query(Integer.class)
+			.single()).isEqualTo(1);
+		assertThat(jdbcClient.sql("SELECT COUNT(*) FROM recommendations WHERE track_id = :trackId")
+			.param("trackId", UUID.fromString(trackId))
+			.query(Integer.class)
+			.single()).isEqualTo(2);
 	}
 
 	@Test
@@ -133,6 +242,10 @@ class RecommendationControllerTests {
 	}
 
 	private void stubTrack(String externalTrackId, String title) {
+		stubTrack(externalTrackId, title, "Rock");
+	}
+
+	private void stubTrack(String externalTrackId, String title, String genreName) {
 		when(catalogLookup.lookup(MusicProvider.APPLE_MUSIC, externalTrackId))
 			.thenReturn(Optional.of(new MusicCatalogTrack(
 				externalTrackId,
@@ -143,14 +256,14 @@ class RecommendationControllerTests {
 				2025,
 				null,
 				false,
-				"Rock",
+				genreName,
 				"https://example.com/preview.m4a",
 				"https://music.apple.com/kr/song/" + externalTrackId)));
 	}
 
 	private static String request(String externalTrackId, String comment) {
 		return """
-			{"provider":"APPLE_MUSIC","externalTrackId":"%s","primaryGenreId":"%s","comment":"%s"}
-			""".formatted(externalTrackId, ROCK_GENRE_ID, comment);
+			{"provider":"APPLE_MUSIC","externalTrackId":"%s","comment":"%s"}
+			""".formatted(externalTrackId, comment);
 	}
 }

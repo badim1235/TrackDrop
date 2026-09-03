@@ -7,6 +7,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
@@ -17,6 +18,8 @@ import tools.jackson.databind.ObjectMapper;
 
 @Component
 final class AppleItunesClient implements MusicCatalogProvider {
+	private static final String USER_AGENT = "Mozilla/5.0 (compatible; TrackPick/1.0)";
+
 	private final RestClient restClient;
 	private final AppleItunesProperties properties;
 	private final ProviderCallRateLimiter rateLimiter;
@@ -61,6 +64,7 @@ final class AppleItunesClient implements MusicCatalogProvider {
 		try {
 			String body = restClient.get()
 				.uri(uri)
+				.header(HttpHeaders.USER_AGENT, USER_AGENT)
 				.retrieve()
 				.onStatus(HttpStatusCode::isError, (request, response) -> {
 					throw MusicSearchException.providerUnavailable();

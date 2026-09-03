@@ -251,7 +251,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Register a new track with its first vote and consume one daily quota */
+        /** Register a track recommendation cycle with its first vote and consume one daily quota */
         post: operations["createRecommendation"];
         delete?: never;
         options?: never;
@@ -396,7 +396,12 @@ export interface components {
             registered: boolean;
             /** Format: uuid */
             trackId: string | null;
+            inCurrentChart: boolean;
             hasVotedToday: boolean;
+            /** Format: date */
+            recommendationAvailableOn: string | null;
+            /** @enum {string} */
+            action: "SELECT" | "VOTE" | "VOTED" | "WAIT";
         };
         GenreResponse: {
             items: components["schemas"]["Genre"][];
@@ -523,8 +528,11 @@ export interface components {
         };
         TrackActions: {
             canVote: boolean;
+            canRecommend: boolean;
             /** @enum {string|null} */
-            reason: "UNAUTHENTICATED" | "ALREADY_VOTED" | "DAILY_LIMIT_EXCEEDED" | null;
+            reason: "UNAUTHENTICATED" | "ALREADY_VOTED" | "DAILY_LIMIT_EXCEEDED" | "RECOMMENDATION_COOLDOWN" | null;
+            /** Format: date */
+            recommendationAvailableOn: string;
         };
         DailyChartResponse: {
             /** Format: date */
@@ -580,8 +588,6 @@ export interface components {
             /** @constant */
             provider: "APPLE_MUSIC";
             externalTrackId: string;
-            /** Format: uuid */
-            primaryGenreId: string;
             comment: string;
         };
         CreateRecommendationResponse: {
@@ -1102,7 +1108,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description The track, recommendation, and first vote were created together. */
+            /** @description The track recommendation cycle and its first vote were created together. */
             201: {
                 headers: {
                     [name: string]: unknown;
@@ -1193,7 +1199,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
-            /** @description The user has already voted for this track today. */
+            /** @description The user already voted, the track is cooling down, or a new recommendation cycle is required. */
             409: {
                 headers: {
                     [name: string]: unknown;

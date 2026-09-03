@@ -135,8 +135,10 @@ export function ChartPage() {
     <div className={styles.pageStack}>
       <header className={styles.pageHeader}>
         <p className={styles.eyebrow}>DAILY CHART</p>
-        <h1>{isFinal ? `${formatChartDate(selectedDate)} 차트` : '오늘의 차트'}</h1>
-        {!isFinal ? <p>{firstPage ? `LIVE · ${formatAsOf(firstPage.asOf)} 기준` : '실시간 추천 순위'}</p> : null}
+        <div className={styles.chartTitleLine}>
+          <h1>{isFinal ? `${formatChartDate(selectedDate)} 차트` : '오늘의 차트'}</h1>
+          {!isFinal ? <p>{firstPage ? `LIVE · ${formatAsOf(firstPage.asOf)} 기준` : '실시간 추천 순위'}</p> : null}
+        </div>
       </header>
       <div className={styles.chartFilters}>
         <label className={`${styles.chartDatePicker} ${isFinal ? styles.activeChartDatePicker : ''}`}>
@@ -257,7 +259,7 @@ export function ChartPage() {
             disabled={chart.isFetchingNextPage}
             onClick={() => chart.fetchNextPage()}
           >
-            {chart.isFetchingNextPage ? '불러오는 중...' : `더보기 (${isFinal ? 30 : 20}곡)`}
+            {chart.isFetchingNextPage ? '불러오는 중...' : `더보기`}
           </button>
         ) : null}
       </section>

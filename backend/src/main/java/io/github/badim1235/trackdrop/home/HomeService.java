@@ -72,7 +72,15 @@ class HomeService {
 			) AS has_voted_today
 		FROM vote_counts
 		JOIN tracks track ON track.id = vote_counts.track_id
-		JOIN recommendations recommendation ON recommendation.track_id = track.id
+		JOIN LATERAL (
+			SELECT latest.id, latest.recommender_user_id, latest.primary_genre_id,
+				latest.comment, latest.comment_visibility, latest.created_at
+			FROM recommendations latest
+			WHERE latest.track_id = track.id
+			  AND latest.recommended_on <= :today
+			ORDER BY latest.recommended_on DESC, latest.created_at DESC, latest.id DESC
+			LIMIT 1
+		) recommendation ON TRUE
 		JOIN users recommender ON recommender.id = recommendation.recommender_user_id
 		JOIN genres genre ON genre.id = recommendation.primary_genre_id
 		JOIN track_provider_refs provider_ref

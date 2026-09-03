@@ -68,7 +68,15 @@ class DailyChartService {
 				provider_ref.external_url
 			FROM votes vote
 			JOIN tracks track ON track.id = vote.track_id
-			JOIN recommendations recommendation ON recommendation.track_id = track.id
+			JOIN LATERAL (
+				SELECT latest.recommender_user_id, latest.primary_genre_id,
+					latest.comment, latest.comment_visibility
+				FROM recommendations latest
+				WHERE latest.track_id = track.id
+				  AND latest.recommended_on <= :chartDate
+				ORDER BY latest.recommended_on DESC, latest.created_at DESC, latest.id DESC
+				LIMIT 1
+			) recommendation ON TRUE
 			JOIN users recommender ON recommender.id = recommendation.recommender_user_id
 			JOIN genres genre ON genre.id = recommendation.primary_genre_id
 			JOIN track_provider_refs provider_ref
@@ -120,7 +128,15 @@ class DailyChartService {
 			provider_ref.external_url
 		FROM daily_rankings daily_ranking
 		JOIN tracks track ON track.id = daily_ranking.track_id
-		JOIN recommendations recommendation ON recommendation.track_id = track.id
+		JOIN LATERAL (
+			SELECT latest.recommender_user_id, latest.primary_genre_id,
+				latest.comment, latest.comment_visibility
+			FROM recommendations latest
+			WHERE latest.track_id = track.id
+			  AND latest.recommended_on <= :chartDate
+			ORDER BY latest.recommended_on DESC, latest.created_at DESC, latest.id DESC
+			LIMIT 1
+		) recommendation ON TRUE
 		JOIN users recommender ON recommender.id = recommendation.recommender_user_id
 		JOIN genres genre ON genre.id = recommendation.primary_genre_id
 		JOIN track_provider_refs provider_ref

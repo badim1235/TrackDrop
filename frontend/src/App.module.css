@@ -25,8 +25,7 @@
   width: fit-content;
   color: var(--ink);
   font-size: 20px;
-  font-weight: 700;
-  font-synthesis: weight;
+  font-weight: 900;
 }
 
 .brandMark {
@@ -113,7 +112,7 @@
   margin: 0 0 11px;
   color: var(--muted);
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 400;
   letter-spacing: 0;
 }
 
@@ -123,10 +122,12 @@
   margin: 0;
   color: var(--ink);
   font-size: clamp(36px, 5vw, 62px);
-  font-weight: 600;
+  font-weight: 500;
   line-height: 1.08;
   letter-spacing: 0;
 }
+
+.intro h1 { font-size: 52px; }
 
 .primaryAction {
   min-width: 142px;
@@ -139,7 +140,6 @@
 }
 
 .primaryAction:hover { opacity: .82; }
-.mobileBreak { display: inline; }
 .contentSection { padding: 56px 0 8px; }
 
 .sectionHeader {
@@ -149,7 +149,7 @@
   margin-bottom: 22px;
 }
 
-.sectionHeader h2 { margin: 0; font-size: 25px; font-weight: 600; }
+.sectionHeader h2 { margin: 0; font-size: 25px; font-weight: 500; }
 .sectionLabel { color: var(--muted); margin-bottom: 5px; }
 
 .textLink {
@@ -289,6 +289,8 @@
 .pageHeader { padding: 32px 0 40px; }
 .pageHeader h1 { font-size: 48px; }
 .pageHeader > p:last-child { color: var(--muted); margin: 12px 0 0; }
+.chartTitleLine { display: flex; align-items: baseline; gap: 13px; flex-wrap: wrap; }
+.chartTitleLine > p { margin: 0; color: var(--muted); font-size: 13px; }
 
 .chartFilters {
   display: flex;
@@ -309,7 +311,7 @@
   color: var(--ink);
   background: var(--paper);
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 400;
 }
 
 .activeChartDatePicker { border-color: var(--ink); }
@@ -329,7 +331,7 @@
   background: transparent;
   box-shadow: none;
   font: inherit;
-  font-weight: 600;
+  font-weight: 400;
   color-scheme: light;
 }
 
@@ -398,7 +400,7 @@
   border-bottom: 1px solid var(--line);
 }
 
-.chartRank { color: var(--ink); font-size: 22px; font-weight: 600; text-align: center; }
+.chartRank { color: var(--ink); font-size: 22px; font-weight: 500; text-align: center; }
 .chartArtwork, .chartArtworkFallback { width: 64px; height: 64px; border-radius: 5px; }
 .chartArtwork { display: block; object-fit: cover; background: var(--surface); }
 .chartArtworkFallback { display: grid; place-items: center; color: var(--muted); background: var(--surface); }
@@ -470,7 +472,7 @@
   text-align: center;
 }
 
-.recommendHeader { display: flex; flex-direction: column; align-items: center; }
+.recommendHeader { display: flex; flex-direction: column; align-items: center; margin-bottom: 32px; }
 
 .recommendIcon {
   width: 52px;
@@ -484,9 +486,7 @@
   box-shadow: var(--button-shadow);
 }
 
-.recommendPage h1 { font-size: 48px; }
-.recommendCopy { margin: 14px 0 32px; color: var(--muted); }
-
+.recommendPage h1 { font-size: 43px; }
 .searchShell {
   width: 100%;
   height: 58px;
@@ -547,7 +547,7 @@ a.loginNotice:hover { color: var(--ink); text-decoration: underline; text-underl
   border-bottom: 1px solid var(--line-strong);
 }
 
-.resultsHeader h2 { margin: 0; font-size: 23px; font-weight: 600; }
+.resultsHeader h2 { margin: 0; font-size: 23px; font-weight: 500; }
 .resultsHeader .sectionLabel { margin-bottom: 4px; }
 .resultsHeader > span { color: var(--muted); font-size: 12px; font-weight: 400; }
 
@@ -602,11 +602,12 @@ a.loginNotice:hover { color: var(--ink); text-decoration: underline; text-underl
   border-radius: 3px;
   color: #8a3933;
   font-size: 9px;
-  font-weight: 600;
+  font-weight: 400;
   text-transform: uppercase;
 }
 
-.trackActions { display: flex; align-items: center; gap: 8px; }
+.trackActionColumn { display: grid; justify-items: end; gap: 6px; }
+.trackActions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
 .trackActions a, .trackActions button {
   height: 34px;
   display: inline-flex;
@@ -624,6 +625,8 @@ a.loginNotice:hover { color: var(--ink); text-decoration: underline; text-underl
 .selectedTrack .trackActions button { background: var(--ink); }
 .trackActions button:disabled { color: var(--muted); background: var(--surface); cursor: not-allowed; }
 .trackActions .votedButton:disabled { color: #fcfbf8; background: var(--success); opacity: 1; }
+.trackActions .waitingButton { color: #fcfbf8; background: var(--ink); }
+.cooldownNotice { margin: 0; color: var(--muted); font-size: 11px; text-align: right; }
 
 .attribution { margin: 14px 0 0; color: var(--muted); font-size: 10px; text-align: right; }
 
@@ -658,6 +661,7 @@ a.loginNotice:hover { color: var(--ink); text-decoration: underline; text-underl
 .composeSection {
   width: 100%;
   margin-top: 54px;
+  scroll-margin-top: 24px;
   text-align: left;
 }
 
@@ -706,8 +710,8 @@ a.loginNotice:hover { color: var(--ink); text-decoration: underline; text-underl
 .composeForm textarea { height: 112px; resize: none; padding: 12px 13px 28px; line-height: 1.55; }
 .composeForm select:focus,
 .composeForm textarea:focus { outline: 2px solid var(--focus-ring); outline-offset: 1px; box-shadow: var(--focus-shadow); }
-.composeForm .field > small { color: var(--muted); font-size: 11px; font-weight: 600; }
-.characterCount { position: absolute; right: 11px; bottom: 10px; color: var(--muted); font-size: 11px; font-weight: 600; }
+.composeForm .field > small { color: var(--muted); font-size: 11px; font-weight: 400; }
+.characterCount { position: absolute; right: 11px; bottom: 10px; color: var(--muted); font-size: 11px; font-weight: 400; }
 
 .recommendSuccess {
   width: min(620px, 100%);
@@ -719,7 +723,7 @@ a.loginNotice:hover { color: var(--ink); text-decoration: underline; text-underl
   border-bottom: 1px solid var(--line);
 }
 .recommendSuccess > svg { margin-bottom: 18px; color: var(--success); }
-.recommendSuccess h1 { font-size: 38px; font-weight: 600; }
+.recommendSuccess h1 { font-size: 38px; font-weight: 500; }
 
 .successTrack {
   width: 100%;
@@ -738,7 +742,7 @@ a.loginNotice:hover { color: var(--ink); text-decoration: underline; text-underl
 .successTrack strong, .successTrack span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .successTrack span, .successTrack small { color: var(--muted); font-size: 13px; }
 .recommendSuccess blockquote { width: 100%; margin: 0; padding: 18px 0; color: var(--ink); line-height: 1.65; text-align: left; }
-.successQuota { width: 100%; margin: 0; padding: 14px 0; border-top: 1px solid var(--line); color: var(--success); font-size: 13px; font-weight: 600; }
+.successQuota { width: 100%; margin: 0; padding: 14px 0; border-top: 1px solid var(--line); color: var(--success); font-size: 13px; font-weight: 400; }
 .successActions { display: flex; gap: 9px; margin-top: 24px; }
 .successActions a, .successActions button {
   height: 42px;
@@ -775,7 +779,7 @@ a.loginNotice:hover { color: var(--ink); text-decoration: underline; text-underl
 }
 
 .authIcon svg { width: 21px; }
-.authHeading h1 { margin: 0; font-size: 36px; font-weight: 600; line-height: 1.2; }
+.authHeading h1 { margin: 0; font-size: 36px; font-weight: 500; line-height: 1.2; }
 
 .authForm {
   display: grid;
@@ -789,7 +793,7 @@ a.loginNotice:hover { color: var(--ink); text-decoration: underline; text-underl
   gap: 8px;
   color: var(--ink);
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 400;
 }
 
 .fieldLabel { display: inline-flex; align-items: center; gap: 6px; width: fit-content; }
@@ -862,8 +866,8 @@ a.loginNotice:hover { color: var(--ink); text-decoration: underline; text-underl
   cursor: pointer;
 }
 
-.fieldError { color: var(--danger); font-size: 12px; font-weight: 600; }
-.availabilityMessage { min-height: 17px; font-size: 12px; font-weight: 600; }
+.fieldError { color: var(--danger); font-size: 12px; font-weight: 400; }
+.availabilityMessage { min-height: 17px; font-size: 12px; font-weight: 400; }
 .availabilitySuccess { color: var(--success); }
 .availabilityError { color: var(--danger); }
 .availabilityPending { color: var(--muted); font-weight: 400; }
@@ -931,7 +935,7 @@ a.loginNotice:hover { color: var(--ink); text-decoration: underline; text-underl
 .submitButton:hover { opacity: .82; }
 .submitButton:disabled, .logoutButton:disabled { opacity: .55; cursor: wait; }
 .authSwitch { margin: 1px 0 0; text-align: center; color: var(--muted); font-size: 13px; }
-.authSwitch a { color: var(--ink); font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
+.authSwitch a { color: var(--ink); font-weight: 500; text-decoration: underline; text-underline-offset: 3px; }
 
 .recoveryPanel {
   display: grid;
@@ -964,13 +968,13 @@ a.loginNotice:hover { color: var(--ink); text-decoration: underline; text-underl
   color: var(--success);
   background: color-mix(in srgb, var(--success) 8%, var(--paper));
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 400;
 }
 
 .successBanner a { flex: 0 0 auto; text-decoration: underline; }
 
 .accountHeader { padding-bottom: 32px; border-bottom: 1px solid var(--line-strong); }
-.accountHeader h1 { margin: 0; overflow-wrap: anywhere; font-size: 40px; font-weight: 600; }
+.accountHeader h1 { margin: 0; overflow-wrap: anywhere; font-size: 40px; font-weight: 500; }
 .accountHeader > p:last-child { margin: 11px 0 0; color: var(--muted); }
 
 .accountDetails { border-bottom: 1px solid var(--line-strong); }
@@ -995,9 +999,9 @@ a.loginNotice:hover { color: var(--ink); text-decoration: underline; text-underl
   border-bottom: 1px solid var(--line-strong);
 }
 .quotaBand div { display: grid; gap: 7px; }
-.quotaBand span { color: var(--muted); font-size: 12px; font-weight: 600; }
+.quotaBand span { color: var(--muted); font-size: 12px; font-weight: 400; }
 .quotaBand strong { font-size: 30px; }
-.quotaBand p { margin: 0; color: var(--success); font-size: 13px; font-weight: 600; }
+.quotaBand p { margin: 0; color: var(--success); font-size: 13px; font-weight: 400; }
 
 .logoutButton {
   height: 42px;
@@ -1064,7 +1068,7 @@ a.loginNotice:hover { color: var(--ink); text-decoration: underline; text-underl
   margin: 0;
   overflow-wrap: anywhere;
   font-size: 46px;
-  font-weight: 600;
+  font-weight: 500;
   line-height: 1.14;
 }
 
@@ -1173,6 +1177,7 @@ a.loginNotice:hover { color: var(--ink); text-decoration: underline; text-underl
 
 .detailVoteBand > button:disabled { color: var(--muted); background: var(--surface); box-shadow: none; cursor: not-allowed; }
 .detailVoteBand > .votedButton:disabled { color: #fcfbf8; background: var(--success); }
+.detailVoteBand > .waitingButton:disabled { color: #fcfbf8; background: var(--ink); opacity: 1; }
 .detailVoteError { margin: 12px 0 0; color: var(--danger); font-size: 12px; text-align: right; }
 
 .detailMessage {
@@ -1208,8 +1213,7 @@ a.loginNotice:hover { color: var(--ink); text-decoration: underline; text-underl
   .main { width: min(100% - 32px, 620px); }
   .pageStack { padding: 28px 0 92px; }
   .intro { min-height: 250px; align-items: flex-start; flex-direction: column; padding: 22px 0 32px; }
-  .intro h1 { font-size: 38px; }
-  .mobileBreak { display: block; }
+  .intro h1 { font-size: 30px; }
   .primaryAction { width: 100%; }
   .contentSection { padding-top: 36px; }
   .homeTrackList { grid-template-columns: 1fr; }
@@ -1227,13 +1231,14 @@ a.loginNotice:hover { color: var(--ink); text-decoration: underline; text-underl
   .chartPreview { width: min(100%, 300px); }
   .chartVoteCell { grid-column: 2 / -1; display: flex; align-items: center; justify-content: flex-end; }
   .recommendPage { min-height: auto; padding: 64px 0 120px; }
-  .recommendPage h1, .pageHeader h1 { font-size: 34px; }
+  .recommendPage h1 { font-size: 29px; }
+  .pageHeader h1 { font-size: 34px; }
   .searchShell { height: 54px; padding-left: 14px; }
   .searchShell button { padding: 0 13px; }
   .searchResults { margin-top: 38px; }
   .trackResults > li { grid-template-columns: 64px minmax(0, 1fr); padding: 10px; }
   .trackArtwork, .artworkFallback { width: 64px; height: 64px; }
-  .trackActions { grid-column: 1 / -1; justify-content: flex-end; padding-top: 2px; }
+  .trackActionColumn { grid-column: 1 / -1; padding-top: 2px; }
   .trackActions a, .trackActions button { min-height: 36px; }
   .composeSection { margin-top: 42px; }
   .composeTrack { grid-template-columns: 64px minmax(0, 1fr); }

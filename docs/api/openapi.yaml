@@ -172,7 +172,7 @@ paths:
           required: true
           schema:
             type: string
-            minLength: 2
+            minLength: 1
             maxLength: 100
       responses:
         '200':
@@ -308,7 +308,7 @@ paths:
   /recommendations:
     post:
       operationId: createRecommendation
-      summary: Register a new track with its first vote and consume one daily quota
+      summary: Register a track recommendation cycle with its first vote and consume one daily quota
       tags: [Recommendation]
       parameters:
         - $ref: '#/components/parameters/CsrfHeader'
@@ -320,7 +320,7 @@ paths:
               $ref: '#/components/schemas/CreateRecommendationRequest'
       responses:
         '201':
-          description: The track, recommendation, and first vote were created together.
+          description: The track recommendation cycle and its first vote were created together.
           content:
             application/json:
               schema:
@@ -408,7 +408,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiErrorResponse'
         '409':
-          description: The user has already voted for this track today.
+          description: The user already voted, the track is cooling down, or a new recommendation cycle is required.
           content:
             application/json:
               schema:
@@ -685,15 +685,29 @@ components:
     ExistingTrack:
       type: object
       additionalProperties: false
-      required: [registered, trackId, hasVotedToday]
+      required:
+        - registered
+        - trackId
+        - inCurrentChart
+        - hasVotedToday
+        - recommendationAvailableOn
+        - action
       properties:
         registered:
           type: boolean
         trackId:
           type: [string, 'null']
           format: uuid
+        inCurrentChart:
+          type: boolean
         hasVotedToday:
           type: boolean
+        recommendationAvailableOn:
+          type: [string, 'null']
+          format: date
+        action:
+          type: string
+          enum: [SELECT, VOTE, VOTED, WAIT]
     GenreResponse:
       type: object
       additionalProperties: false
@@ -996,13 +1010,18 @@ components:
     TrackActions:
       type: object
       additionalProperties: false
-      required: [canVote, reason]
+      required: [canVote, canRecommend, reason, recommendationAvailableOn]
       properties:
         canVote:
           type: boolean
+        canRecommend:
+          type: boolean
         reason:
           type: [string, 'null']
-          enum: [UNAUTHENTICATED, ALREADY_VOTED, DAILY_LIMIT_EXCEEDED, null]
+          enum: [UNAUTHENTICATED, ALREADY_VOTED, DAILY_LIMIT_EXCEEDED, RECOMMENDATION_COOLDOWN, null]
+        recommendationAvailableOn:
+          type: string
+          format: date
     DailyChartResponse:
       type: object
       additionalProperties: false
@@ -1124,7 +1143,7 @@ components:
     CreateRecommendationRequest:
       type: object
       additionalProperties: false
-      required: [provider, externalTrackId, primaryGenreId, comment]
+      required: [provider, externalTrackId, comment]
       properties:
         provider:
           type: string
@@ -1133,9 +1152,6 @@ components:
           type: string
           minLength: 1
           maxLength: 255
-        primaryGenreId:
-          type: string
-          format: uuid
         comment:
           type: string
           minLength: 1

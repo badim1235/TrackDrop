@@ -26,7 +26,6 @@ class MusicCatalogConfiguration {
 		return RestClient.builder()
 			.baseUrl(properties.baseUrl().toString())
 			.requestFactory(requestFactory)
-			.defaultHeader("User-Agent", "TrackDrop/0.1")
 			.build();
 	}
 

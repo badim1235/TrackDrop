@@ -39,7 +39,7 @@ TrackDrop MVP의 화면과 도메인 명령을 HTTP API 계약으로 정의한�
 | CSRF | cookie 인증의 모든 상태 변경 요청에 CSRF token 요구 |
 | 공개 범위 | 홈, 장르, Track, 최근 등록, 오늘/과거 차트 조회 |
 | 인증 범위 | 외부 음악 검색, Recommendation 생성, Vote, Account 조회, 신고 |
-| Recommendation | `POST /recommendations`로 새로운 Track 최초 소개 |
+| Recommendation | `POST /recommendations`로 Track 최초 소개 또는 3일 후 재추천 회차 생성 |
 | Vote | `POST /tracks/{trackId}/votes`로 오늘의 지지 생성 |
 | 일일 권한 | 쓰기 성공 응답에 `limit`, `used`, `remaining`, `resetAt` 포함 |
 | Chart | 오늘은 `LIVE`, 과거 완료 snapshot은 `FINAL`, batch 처리 중은 `PROCESSING` |
@@ -64,7 +64,7 @@ MVP API는 cookie 계약만 확정한다. 실제 session이 DB, Redis, framework
 
 ### 4.2 Recommendation과 Vote endpoint 분리
 
-새로운 곡 소개는 provider metadata 재검증, Track 정규화, 대표 Genre와 한줄평 저장이 필요하다. 기존 곡 Vote는 `trackId`만 필요하다. 두 행위의 입력과 실패 이유가 다르므로 endpoint를 분리한다.
+차트 밖의 곡을 처음 또는 다시 소개할 때는 provider metadata 재검증, Track 정규화, 대표 Genre와 한줄평 저장이 필요하다. 오늘 차트에 이미 올라온 곡의 Vote는 `trackId`만 필요하다. 두 행위의 입력과 실패 이유가 다르므로 endpoint를 분리한다.
 
 ### 4.3 live chart pagination은 as-of cursor 사용
 
@@ -84,7 +84,7 @@ Trade-off:
 
 과거 차트 응답에는 `actions.canVote=false`를 반환하고 화면에서도 Vote 행동을 노출하지 않는다. Vote endpoint 자체는 언제나 서버의 오늘 날짜에만 Vote를 생성하므로 과거 snapshot을 변경할 수 없다.
 
-과거 차트에 등장한 Track을 오늘의 홈이나 현재 Track 상세에서 다시 Vote하는 것은 허용할 수 있지만, 과거 차트 화면에서는 추천 진입점을 제공하지 않는다.
+과거 차트 화면 자체에는 추천 진입점을 제공하지 않는다. Track 상세에서는 현재 차트 등록 여부와 곡 단위 3일 재추천 대기 기간을 확인하며, 차트 밖의 곡은 추천 화면에서 새 한줄평과 함께 재등록해야 한다.
 
 ## 5. 공통 규칙
 
@@ -188,7 +188,7 @@ Path=/
 | `password` | 8~16자, 영문자·숫자 필수, 공백 불가 |
 | `email` | RFC 호환 parser 사용, 최대 320자, Supabase Auth와 정규화 email 기준 Unique |
 | `comment` | trim 후 1~120자 |
-| music search `query` | trim 후 2~100자 |
+| music search `query` | trim 후 1~100자 |
 | report `details` | 선택, 최대 500자 |
 
 문자열 검증은 frontend와 server가 모두 수행하되 server가 최종 기준이다.
@@ -299,7 +299,7 @@ Path=/
 | GET | `/tracks/recent` | 공개 | 최근 등록 Track 목록 |
 | GET | `/tracks/{trackId}` | 공개 | Track 상세 |
 | GET | `/music/search` | 필요 | 외부 Music API 검색 |
-| POST | `/recommendations` | 필요 | 신규 Track Recommendation 생성 |
+| POST | `/recommendations` | 필요 | Track 최초 또는 재추천 회차 생성 |
 | POST | `/tracks/{trackId}/votes` | 필요 | 기존 Track에 오늘 Vote |
 | GET | `/charts/daily` | 공개 | 오늘 live 또는 과거 final 차트 |
 | POST | `/recommendations/{recommendationId}/reports` | 필요, flag | 한줄평 신고 |
@@ -446,7 +446,7 @@ Response `200 OK`:
 }
 ```
 
-Recommendation 화면은 Apple Music이 검색 결과에 반환한 장르와 같은 항목을 기본값으로 제안하고, 이 응답에서 대표 Genre 하나를 선택한다. 임의 문자열 장르는 제출할 수 없다.
+Recommendation 화면은 사용자의 장르 선택을 받지 않는다. 서버가 Apple Music의 `primaryGenreName`을 활성 시스템 장르에 매칭하며, 일치하지 않으면 `Other`를 사용한다.
 
 ## 11. Home API
 
@@ -523,7 +523,9 @@ Response `200 OK`:
   "quota": null,
   "actions": {
     "canVote": false,
-    "reason": "UNAUTHENTICATED"
+    "canRecommend": false,
+    "reason": "UNAUTHENTICATED",
+    "recommendationAvailableOn": "2026-09-02"
   }
 }
 ```
@@ -546,7 +548,7 @@ Query:
 
 | 이름 | 필수 | 설명 |
 | --- | --- | --- |
-| `query` | Y | 곡명, 아티스트 또는 조합, 2~100자 |
+| `query` | Y | 곡명, 아티스트 또는 조합, 1~100자 |
 
 MVP는 `country=KR`, `media=music`, `entity=song`, `limit=20`, `explicit=Yes`로 검색한다. Apple이 반환한 관련도 순서를 유지하며 별도 pagination은 제공하지 않는다.
 
@@ -578,7 +580,11 @@ Response `200 OK`:
       "externalUrl": "https://music.apple.com/kr/album/example/external-id",
       "existingTrack": {
         "registered": false,
-        "trackId": null
+        "trackId": null,
+        "inCurrentChart": false,
+        "hasVotedToday": false,
+        "recommendationAvailableOn": null,
+        "action": "SELECT"
       }
     }
   ]
@@ -586,6 +592,13 @@ Response `200 OK`:
 ```
 
 검색 결과는 후보일 뿐 신뢰 가능한 쓰기 payload가 아니다. Recommendation 제출 시 server가 `provider + externalTrackId`로 metadata를 다시 검증한다.
+
+`existingTrack.action`은 다음 네 상태 중 하나다.
+
+- `SELECT`: 최초 등록이거나 마지막 등록일부터 3일이 지나 새 한줄평과 함께 등록할 수 있다.
+- `VOTE`: 오늘 차트에 등록됐고 현재 사용자는 아직 추천하지 않았다.
+- `VOTED`: 현재 사용자가 오늘 이미 추천했다.
+- `WAIT`: 오늘 차트에는 없지만 3일 대기 기간이 끝나지 않았다. `recommendationAvailableOn`을 함께 표시한다.
 
 `explicit=true`인 결과도 숨기지 않고 UI에서 `Explicit`으로 표시한다. Apple iTunes Search API는 ISRC를 항상 제공하지 않으므로 `isrc`는 nullable이다.
 
@@ -605,8 +618,8 @@ provider의 원본 오류 message와 credential은 반환하지 않는다.
 ### POST /recommendations
 
 - 인증 및 CSRF 필요
-- 새로운 Track 최초 소개, 대표 Genre 선택, 한줄평 저장
-- 최초 Vote와 quota 1회 소비를 하나의 transaction으로 처리
+- Track 최초 소개 또는 재추천 회차 생성, Apple Music Genre 자동 분류, 한줄평 저장
+- 추천 회차의 최초 Vote와 quota 1회 소비를 하나의 transaction으로 처리
 
 Request:
 
@@ -614,7 +627,6 @@ Request:
 {
   "provider": "APPLE_MUSIC",
   "externalTrackId": "external-id",
-  "primaryGenreId": "genre-id",
   "comment": "후반부 기타가 들어올 때까지 꼭 들어보세요."
 }
 ```
@@ -622,10 +634,12 @@ Request:
 검증:
 
 - provider는 MVP에서 `APPLE_MUSIC`이어야 하며 externalTrackId가 실제 Track을 가리켜야 한다.
-- `primaryGenreId`는 `/genres`에서 반환된 활성 시스템 Genre여야 한다.
-- Genre 자유 입력은 허용하지 않는다.
+- server가 Apple Music의 `primaryGenreName`을 활성 시스템 Genre와 매칭한다.
+- 일치하는 활성 Genre가 없으면 `Other`로 분류하며, 사용자의 Genre 선택이나 자유 입력은 허용하지 않는다.
 - comment는 trim 후 1~120자다.
 - 사용자의 오늘 quota가 남아 있어야 한다.
+- 같은 곡은 마지막 `recommendedOn`의 KST 날짜에서 3일이 지난 날부터 다시 등록할 수 있다. 9월 1일 등록이면 9월 4일부터 가능하다.
+- 오늘 차트에 이미 Vote가 있는 곡은 새 회차를 만들지 않고 Vote endpoint를 사용한다.
 
 Response `201 Created`:
 
@@ -659,22 +673,24 @@ Response `201 Created`:
 오류:
 
 - `400 VALIDATION_FAILED`
-- `400 GENRE_INACTIVE_OR_NOT_FOUND`
+- `400 PROVIDER_GENRE_UNAVAILABLE`
 - `401 UNAUTHENTICATED`
-- `409 ALREADY_RECOMMENDED`
+- `409 RECOMMENDATION_COOLDOWN`
+- `409 ALREADY_IN_CURRENT_CHART`
 - `429 DAILY_LIMIT_EXCEEDED`
 - `503 MUSIC_PROVIDER_UNAVAILABLE`
 
-동시 등록 충돌 response `409 Conflict`:
+재추천 대기 response `409 Conflict`:
 
 ```json
 {
   "error": {
-    "code": "ALREADY_RECOMMENDED",
-    "message": "다른 사용자가 먼저 등록한 곡입니다.",
+    "code": "RECOMMENDATION_COOLDOWN",
+    "message": "최근 추천된 곡입니다. 9월 4일부터 다시 추천할 수 있습니다.",
     "details": {
       "existingTrackId": "track-id",
       "existingRecommendationId": "recommendation-id",
+      "recommendationAvailableOn": "2026-09-04",
       "quotaConsumed": false
     },
     "traceId": "trace-id"
@@ -691,6 +707,8 @@ Response `201 Created`:
 - 인증 및 CSRF 필요
 - body 없음
 - 서버의 오늘 날짜로만 Vote 생성
+- 오늘 차트에 이미 등록된 Track에만 직접 Vote할 수 있다.
+- 차트 밖의 Track은 대기 중이면 `RECOMMENDATION_COOLDOWN`, 대기가 끝났으면 `RECOMMENDATION_REQUIRED`를 반환해 한줄평 없는 우회 등록을 막는다.
 
 Response `201 Created`:
 
@@ -717,6 +735,8 @@ Response `201 Created`:
 - `401 UNAUTHENTICATED`
 - `404 TRACK_NOT_FOUND`
 - `409 ALREADY_VOTED`
+- `409 RECOMMENDATION_COOLDOWN`
+- `409 RECOMMENDATION_REQUIRED`
 - `429 DAILY_LIMIT_EXCEEDED`
 
 Duplicate retry가 Unique Constraint에 걸리면 quota 증가 transaction도 rollback한다. `ALREADY_VOTED` details에는 현재 `trackId`, `votedOn`, quota를 포함해 frontend가 성공 상태처럼 동기화할 수 있게 한다.
@@ -869,7 +889,7 @@ Response `201 Created`:
 | 400 | `VALIDATION_FAILED` | field 검증 실패 |
 | 400 | `INVALID_CURSOR` | cursor 위변조 또는 query 불일치 |
 | 400 | `FUTURE_DATE_NOT_ALLOWED` | 미래 차트 요청 |
-| 400 | `GENRE_INACTIVE_OR_NOT_FOUND` | 등록에 사용할 수 없는 Genre |
+| 400 | `PROVIDER_GENRE_UNAVAILABLE` | provider 장르를 시스템 Genre로 분류할 수 없음 |
 | 401 | `UNAUTHENTICATED` | 로그인 필요 |
 | 401 | `INVALID_CREDENTIALS` | 로그인 실패 |
 | 403 | `CSRF_TOKEN_INVALID` | CSRF 검증 실패 |
@@ -879,8 +899,10 @@ Response `201 Created`:
 | 404 | `RECOMMENDATION_NOT_FOUND` | Recommendation 없음 |
 | 404 | `RANKING_NOT_AVAILABLE` | 과거 snapshot 비정상 누락 |
 | 404 | `NOT_FOUND` | 존재하지 않거나 feature flag로 비활성화된 route |
-| 409 | `ALREADY_RECOMMENDED` | Track 동시/중복 등록 |
+| 409 | `RECOMMENDATION_COOLDOWN` | 곡 단위 3일 재추천 대기 중 |
+| 409 | `ALREADY_IN_CURRENT_CHART` | 다른 사용자가 먼저 오늘 차트에 등록 |
 | 409 | `ALREADY_VOTED` | 오늘 동일 Track 중복 Vote |
+| 409 | `RECOMMENDATION_REQUIRED` | 차트 밖의 곡에 새 한줄평 등록 필요 |
 | 409 | `ALREADY_REPORTED` | 동일 한줄평 중복 신고 |
 | 429 | `DAILY_LIMIT_EXCEEDED` | 오늘의 추천 4회 소진 |
 | 429 | `RATE_LIMITED` | 보안 또는 provider 보호용 요청 제한 |
@@ -914,8 +936,8 @@ Response `201 Created`:
 
 ### Recommendation
 
-- 같은 provider Track의 동시 등록 중 하나만 `201`이다.
-- 나머지는 `409 ALREADY_RECOMMENDED`와 기존 내부 Track ID를 받는다.
+- 같은 provider Track의 동시 추천 회차 생성 중 하나만 `201`이다.
+- 나머지는 `409 RECOMMENDATION_COOLDOWN` 또는 `409 ALREADY_IN_CURRENT_CHART`와 기존 내부 Track ID를 받는다.
 - 충돌한 요청의 quota는 소비되지 않는다.
 
 ### Daily limit

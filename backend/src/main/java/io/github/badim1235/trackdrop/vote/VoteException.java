@@ -50,6 +50,27 @@ public class VoteException extends RuntimeException {
 			cause);
 	}
 
+	static VoteException recommendationCooldown(UUID trackId, LocalDate availableOn) {
+		return new VoteException(
+			"RECOMMENDATION_COOLDOWN",
+			"최근 추천된 곡입니다. " + availableOn.getMonthValue() + "월 "
+				+ availableOn.getDayOfMonth() + "일부터 다시 추천할 수 있습니다.",
+			HttpStatus.CONFLICT,
+			Map.of(
+				"trackId", trackId.toString(),
+				"recommendationAvailableOn", availableOn.toString()),
+			null);
+	}
+
+	static VoteException recommendationRequired(UUID trackId) {
+		return new VoteException(
+			"RECOMMENDATION_REQUIRED",
+			"추천 화면에서 한줄평과 함께 다시 등록해 주세요.",
+			HttpStatus.CONFLICT,
+			Map.of("trackId", trackId.toString()),
+			null);
+	}
+
 	public String getCode() {
 		return code;
 	}

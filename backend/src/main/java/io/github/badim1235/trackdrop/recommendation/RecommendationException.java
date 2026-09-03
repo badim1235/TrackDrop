@@ -1,5 +1,6 @@
 package io.github.badim1235.trackdrop.recommendation;
 
+import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -30,10 +31,10 @@ public class RecommendationException extends RuntimeException {
 			Map.of());
 	}
 
-	static RecommendationException genreNotFound() {
+	static RecommendationException providerGenreUnavailable() {
 		return new RecommendationException(
-			"GENRE_INACTIVE_OR_NOT_FOUND",
-			"선택할 수 없는 장르입니다.",
+			"PROVIDER_GENRE_UNAVAILABLE",
+			"Apple Music 장르를 확인할 수 없습니다.",
 			HttpStatus.BAD_REQUEST,
 			Map.of());
 	}
@@ -46,18 +47,37 @@ public class RecommendationException extends RuntimeException {
 			Map.of());
 	}
 
-	static RecommendationException alreadyRecommended(UUID trackId, UUID recommendationId) {
+	static RecommendationException recommendationCooldown(
+		UUID trackId,
+		UUID recommendationId,
+		LocalDate availableOn
+	) {
+		Map<String, Object> details = recommendationDetails(trackId, recommendationId);
+		details.put("recommendationAvailableOn", availableOn.toString());
+		return new RecommendationException(
+			"RECOMMENDATION_COOLDOWN",
+			"최근 추천된 곡입니다. " + availableOn.getMonthValue() + "월 "
+				+ availableOn.getDayOfMonth() + "일부터 다시 추천할 수 있습니다.",
+			HttpStatus.CONFLICT,
+			Map.copyOf(details));
+	}
+
+	static RecommendationException alreadyInCurrentChart(UUID trackId, UUID recommendationId) {
+		return new RecommendationException(
+			"ALREADY_IN_CURRENT_CHART",
+			"현재 차트에 등록된 곡입니다.",
+			HttpStatus.CONFLICT,
+			Map.copyOf(recommendationDetails(trackId, recommendationId)));
+	}
+
+	private static Map<String, Object> recommendationDetails(UUID trackId, UUID recommendationId) {
 		Map<String, Object> details = new LinkedHashMap<>();
 		details.put("existingTrackId", trackId.toString());
 		if (recommendationId != null) {
 			details.put("existingRecommendationId", recommendationId.toString());
 		}
 		details.put("quotaConsumed", false);
-		return new RecommendationException(
-			"ALREADY_RECOMMENDED",
-			"이미 등록된 곡입니다.",
-			HttpStatus.CONFLICT,
-			Map.copyOf(details));
+		return details;
 	}
 
 	public String getCode() {

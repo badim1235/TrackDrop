@@ -14,14 +14,21 @@ public class JdbcSupabaseUserDirectory implements SupabaseUserDirectory {
 
 	@Override
 	public boolean existsByEmail(String normalizedEmail) {
+		boolean authSchemaAvailable = Boolean.TRUE.equals(jdbcClient.sql("""
+			SELECT TO_REGCLASS('auth.users') IS NOT NULL
+			""")
+			.query(Boolean.class)
+			.single());
+		String directoryTable = authSchemaAvailable ? "auth.users" : "users";
+		String emailColumn = authSchemaAvailable ? "email" : "email_normalized";
 		return Boolean.TRUE.equals(jdbcClient.sql("""
 			SELECT EXISTS (
 				SELECT 1
-				FROM auth.users
-				WHERE email IS NOT NULL
-					AND LOWER(email) = :email
+				FROM %s
+				WHERE %s IS NOT NULL
+					AND LOWER(%s) = :email
 			)
-			""")
+			""".formatted(directoryTable, emailColumn, emailColumn))
 			.param("email", normalizedEmail)
 			.query(Boolean.class)
 			.single());

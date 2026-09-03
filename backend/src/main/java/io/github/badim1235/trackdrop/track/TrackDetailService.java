@@ -57,7 +57,14 @@ class TrackDetailService {
 				) AS genre_rank
 			FROM vote_counts
 			JOIN tracks track ON track.id = vote_counts.track_id
-			JOIN recommendations recommendation ON recommendation.track_id = track.id
+			JOIN LATERAL (
+				SELECT latest.primary_genre_id
+				FROM recommendations latest
+				WHERE latest.track_id = track.id
+				  AND latest.recommended_on <= :today
+				ORDER BY latest.recommended_on DESC, latest.created_at DESC, latest.id DESC
+				LIMIT 1
+			) recommendation ON TRUE
 		)
 		SELECT
 			track.id,
@@ -73,10 +80,11 @@ class TrackDetailService {
 			genre.code AS genre_code,
 			genre.display_name AS genre_display_name,
 			genre.sort_order AS genre_sort_order,
-			recommendation.id AS recommendation_id,
-			CASE WHEN recommendation.comment_visibility = 'VISIBLE' THEN recommendation.comment END AS comment,
-			CASE WHEN recommendation.comment_visibility = 'VISIBLE' THEN recommender.public_nickname END AS recommender_nickname,
-			recommendation.created_at AS recommendation_created_at,
+			first_recommendation.id AS recommendation_id,
+			CASE WHEN first_recommendation.comment_visibility = 'VISIBLE' THEN first_recommendation.comment END AS comment,
+			CASE WHEN first_recommendation.comment_visibility = 'VISIBLE' THEN recommender.public_nickname END AS recommender_nickname,
+			first_recommendation.created_at AS recommendation_created_at,
+			latest_recommendation.recommended_on AS latest_recommended_on,
 			provider_ref.external_track_id,
 			provider_ref.external_url,
 			provider_ref.preview_url,
@@ -90,11 +98,32 @@ class TrackDetailService {
 				WHERE viewer_vote.user_id = :viewerId
 				  AND viewer_vote.track_id = track.id
 				  AND viewer_vote.voted_on = :today
-			) AS has_voted_today
+			) AS has_voted_today,
+			EXISTS (
+				SELECT 1
+				FROM votes current_vote
+				WHERE current_vote.track_id = track.id
+				  AND current_vote.voted_on = :today
+			) AS in_current_chart
 		FROM tracks track
-		JOIN recommendations recommendation ON recommendation.track_id = track.id
-		JOIN users recommender ON recommender.id = recommendation.recommender_user_id
-		JOIN genres genre ON genre.id = recommendation.primary_genre_id
+		JOIN LATERAL (
+			SELECT latest.id, latest.recommender_user_id, latest.primary_genre_id,
+				latest.comment, latest.comment_visibility, latest.recommended_on, latest.created_at
+			FROM recommendations latest
+			WHERE latest.track_id = track.id
+			ORDER BY latest.recommended_on DESC, latest.created_at DESC, latest.id DESC
+			LIMIT 1
+		) latest_recommendation ON TRUE
+		JOIN LATERAL (
+			SELECT first_pick.id, first_pick.recommender_user_id,
+				first_pick.comment, first_pick.comment_visibility, first_pick.created_at
+			FROM recommendations first_pick
+			WHERE first_pick.track_id = track.id
+			ORDER BY first_pick.recommended_on ASC, first_pick.created_at ASC, first_pick.id ASC
+			LIMIT 1
+		) first_recommendation ON TRUE
+		JOIN users recommender ON recommender.id = first_recommendation.recommender_user_id
+		JOIN genres genre ON genre.id = latest_recommendation.primary_genre_id
 		JOIN track_provider_refs provider_ref
 		  ON provider_ref.track_id = track.id AND provider_ref.provider = 'APPLE_MUSIC'
 		LEFT JOIN ranked ON ranked.track_id = track.id
@@ -126,7 +155,13 @@ class TrackDetailService {
 			.orElseThrow(TrackDetailException::notFound);
 		List<Genre> genres = findGenres(trackId);
 		DailyQuotaSnapshot quota = authenticated ? quotaService.current(viewerId) : null;
-		Actions actions = actions(authenticated, row.hasVotedToday(), quota);
+		Actions actions = actions(
+			authenticated,
+			row.hasVotedToday(),
+			row.inCurrentChart(),
+			row.latestRecommendedOn(),
+			today,
+			quota);
 		String previewUrl = row.previewUrl();
 
 		Track track = new Track(
@@ -187,18 +222,28 @@ class TrackDetailService {
 	private static Actions actions(
 		boolean authenticated,
 		boolean hasVotedToday,
+		boolean inCurrentChart,
+		LocalDate latestRecommendedOn,
+		LocalDate today,
 		DailyQuotaSnapshot quota
 	) {
-		if (!authenticated) {
-			return new Actions(false, "UNAUTHENTICATED");
-		}
+		LocalDate availableOn = latestRecommendedOn.plusDays(3);
 		if (hasVotedToday) {
-			return new Actions(false, "ALREADY_VOTED");
+			return new Actions(false, false, "ALREADY_VOTED", availableOn);
+		}
+		if (!inCurrentChart && today.isBefore(availableOn)) {
+			return new Actions(false, false, "RECOMMENDATION_COOLDOWN", availableOn);
+		}
+		if (!authenticated) {
+			return new Actions(false, false, "UNAUTHENTICATED", availableOn);
 		}
 		if (quota.remaining() == 0) {
-			return new Actions(false, "DAILY_LIMIT_EXCEEDED");
+			return new Actions(false, false, "DAILY_LIMIT_EXCEEDED", availableOn);
 		}
-		return new Actions(true, null);
+		if (inCurrentChart) {
+			return new Actions(true, false, null, availableOn);
+		}
+		return new Actions(false, true, null, availableOn);
 	}
 
 	private static TrackRow mapRow(ResultSet row, int rowNumber) throws SQLException {
@@ -221,6 +266,7 @@ class TrackDetailService {
 			row.getString("comment"),
 			row.getString("recommender_nickname"),
 			row.getObject("recommendation_created_at", OffsetDateTime.class).toInstant(),
+			row.getObject("latest_recommended_on", LocalDate.class),
 			row.getString("external_track_id"),
 			row.getString("external_url"),
 			row.getString("preview_url"),
@@ -228,7 +274,8 @@ class TrackDetailService {
 			row.getInt("today_vote_count"),
 			nullableLong(row, "overall_rank"),
 			nullableLong(row, "genre_rank"),
-			row.getBoolean("has_voted_today"));
+			row.getBoolean("has_voted_today"),
+			row.getBoolean("in_current_chart"));
 	}
 
 	private static Long nullableLong(ResultSet row, String column) throws SQLException {
@@ -251,6 +298,7 @@ class TrackDetailService {
 		String comment,
 		String recommenderNickname,
 		Instant recommendationCreatedAt,
+		LocalDate latestRecommendedOn,
 		String externalTrackId,
 		String externalUrl,
 		String previewUrl,
@@ -258,7 +306,8 @@ class TrackDetailService {
 		int todayVoteCount,
 		Long overallRank,
 		Long genreRank,
-		boolean hasVotedToday
+		boolean hasVotedToday,
+		boolean inCurrentChart
 	) {
 	}
 }

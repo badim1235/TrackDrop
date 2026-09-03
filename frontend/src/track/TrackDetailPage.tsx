@@ -40,6 +40,11 @@ function formatRegisteredAt(value: string) {
   }).format(new Date(value))
 }
 
+function recommendationAvailableMessage(value: string) {
+  const [, month, day] = value.split('-').map(Number)
+  return `${month}월 ${day}일부터 다시 추천할 수 있어요.`
+}
+
 function DetailArtwork({ src }: { src: string | null }) {
   const [failed, setFailed] = useState(false)
   if (!src || failed) {
@@ -110,6 +115,10 @@ export function TrackDetailPage() {
   const { track, today, actions } = detail.data
   const provider = track.providerReferences[0]
   const hasVoted = track.viewer?.hasVotedToday ?? actions.reason === 'ALREADY_VOTED'
+  const waiting = actions.reason === 'RECOMMENDATION_COOLDOWN'
+  const recommendQuery = new URLSearchParams({
+    query: `${track.title} ${track.artistName}`,
+  }).toString()
   const metadata = [track.albumName, track.releaseYear, track.providerGenreName]
     .filter((value): value is string | number => value !== null)
 
@@ -170,12 +179,22 @@ export function TrackDetailPage() {
 
       <section className={styles.detailVoteBand} aria-label="곡 추천하기">
         <div>
-          <strong>이 곡이 마음에 드시나요?</strong>
-          <span>추천하면 오늘의 추천권 1회를 사용합니다.</span>
+          <strong>{waiting ? '최근 추천된 곡이에요.' : '이 곡이 마음에 드시나요?'}</strong>
+          <span>
+            {waiting
+              ? recommendationAvailableMessage(actions.recommendationAvailableOn)
+              : '추천하면 오늘의 추천권 1회를 사용합니다.'}
+          </span>
         </div>
-        {!account ? (
+        {waiting ? (
+          <button className={styles.waitingButton} type="button" disabled>추천 대기</button>
+        ) : !account ? (
           <NavLink to={`/login?returnTo=${encodeURIComponent(`/tracks/${trackId}`)}`}>
             <LogIn aria-hidden="true" size={16} /> 로그인하고 추천
+          </NavLink>
+        ) : actions.canRecommend ? (
+          <NavLink to={`/recommend?${recommendQuery}`}>
+            <ThumbsUp aria-hidden="true" size={16} /> 다시 추천
           </NavLink>
         ) : (
           <button

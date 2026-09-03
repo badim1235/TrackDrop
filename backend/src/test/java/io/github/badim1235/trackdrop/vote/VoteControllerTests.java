@@ -15,6 +15,8 @@ import io.github.badim1235.trackdrop.catalog.MusicProvider;
 import io.github.badim1235.trackdrop.identity.SupabaseAuthGateway;
 import jakarta.servlet.http.Cookie;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -35,8 +37,8 @@ import org.springframework.test.web.servlet.MvcResult;
 @SpringBootTest
 @AutoConfigureMockMvc
 class VoteControllerTests {
-	private static final String ROCK_GENRE_ID = "10000000-0000-0000-0000-000000000020";
 	private static final AtomicInteger IP_SEQUENCE = new AtomicInteger();
+	private static final ZoneId SERVICE_ZONE = ZoneId.of("Asia/Seoul");
 
 	@Autowired
 	private MockMvc mockMvc;
@@ -101,6 +103,33 @@ class VoteControllerTests {
 	}
 
 	@Test
+	void preventsADetailVoteWhileTheTrackIsCoolingDown() throws Exception {
+		UUID trackId = createTrack(signUp(), uniqueExternalId(), "Cooling Track");
+		LocalDate today = LocalDate.now(SERVICE_ZONE);
+		moveRecommendationCycle(trackId, today.minusDays(1));
+		Cookie voter = signUp();
+
+		mockMvc.perform(post("/api/v1/tracks/{trackId}/votes", trackId)
+				.cookie(voter).with(csrf()))
+			.andExpect(status().isConflict())
+			.andExpect(jsonPath("$.error.code").value("RECOMMENDATION_COOLDOWN"))
+			.andExpect(jsonPath("$.error.details.recommendationAvailableOn")
+				.value(today.plusDays(2).toString()));
+	}
+
+	@Test
+	void requiresANewRecommendationCycleAfterTheCooldown() throws Exception {
+		UUID trackId = createTrack(signUp(), uniqueExternalId(), "Eligible Track");
+		moveRecommendationCycle(trackId, LocalDate.now(SERVICE_ZONE).minusDays(3));
+		Cookie voter = signUp();
+
+		mockMvc.perform(post("/api/v1/tracks/{trackId}/votes", trackId)
+				.cookie(voter).with(csrf()))
+			.andExpect(status().isConflict())
+			.andExpect(jsonPath("$.error.code").value("RECOMMENDATION_REQUIRED"));
+	}
+
+	@Test
 	void rollsBackTheFifthVoteWhenDailyQuotaIsExhausted() throws Exception {
 		Cookie firstOwner = signUp();
 		Cookie secondOwner = signUp();
@@ -141,8 +170,8 @@ class VoteControllerTests {
 				.with(csrf())
 				.contentType(MediaType.APPLICATION_JSON)
 				.content("""
-					{"provider":"APPLE_MUSIC","externalTrackId":"%s","primaryGenreId":"%s","comment":"좋은 음악을 소개합니다."}
-					""".formatted(externalTrackId, ROCK_GENRE_ID)))
+					{"provider":"APPLE_MUSIC","externalTrackId":"%s","comment":"좋은 음악을 소개합니다."}
+					""".formatted(externalTrackId)))
 			.andExpect(status().isCreated())
 			.andReturn();
 		return UUID.fromString(JsonPath.read(result.getResponse().getContentAsString(), "$.track.id"));
@@ -187,6 +216,17 @@ class VoteControllerTests {
 				"Rock",
 				"https://example.com/preview.m4a",
 				"https://music.apple.com/kr/song/" + externalTrackId)));
+	}
+
+	private void moveRecommendationCycle(UUID trackId, LocalDate date) {
+		jdbcClient.sql("UPDATE recommendations SET recommended_on = :date WHERE track_id = :trackId")
+			.param("date", date)
+			.param("trackId", trackId)
+			.update();
+		jdbcClient.sql("UPDATE votes SET voted_on = :date WHERE track_id = :trackId")
+			.param("date", date)
+			.param("trackId", trackId)
+			.update();
 	}
 
 	private static String uniqueExternalId() {

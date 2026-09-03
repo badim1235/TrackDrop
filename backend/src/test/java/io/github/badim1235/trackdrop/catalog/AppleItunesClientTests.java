@@ -1,6 +1,7 @@
 package io.github.badim1235.trackdrop.catalog;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.header;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.queryParam;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
@@ -104,6 +105,35 @@ class AppleItunesClientTests {
 			assertThat(track.title()).isEqualTo("0+0");
 			assertThat(track.artistName()).isEqualTo("한로로");
 		});
+		server.verify();
+	}
+
+	@Test
+	void sendsBrowserCompatibleHeaderAndPercentEncodesKoreanSearchTerms() {
+		RestClient.Builder builder = RestClient.builder().baseUrl("https://itunes.apple.com");
+		MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+		AppleItunesClient client = new AppleItunesClient(
+			builder.build(),
+			properties(),
+			new ProviderCallRateLimiter(15, Clock.systemUTC()),
+			new ObjectMapper());
+
+		server.expect(requestTo(
+			"https://itunes.apple.com/search?term=%ED%95%9C%EB%A1%9C%EB%A1%9C&country=KR&media=music&entity=song&limit=20&explicit=Yes&lang=en_us"))
+			.andExpect(header("User-Agent", "Mozilla/5.0 (compatible; TrackPick/1.0)"))
+			.andRespond(withSuccess("""
+				{"results":[{
+				  "kind":"song",
+				  "trackId":1828393595,
+				  "trackName":"0+0",
+				  "artistName":"한로로"
+				}]}
+				""", MediaType.parseMediaType("text/javascript;charset=utf-8")));
+
+		assertThat(client.search("한로로"))
+			.singleElement()
+			.extracting(MusicCatalogTrack::artistName)
+			.isEqualTo("한로로");
 		server.verify();
 	}
 

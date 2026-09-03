@@ -28,7 +28,6 @@ public class RecommendationService {
 			userId,
 			request.provider(),
 			track,
-			request.primaryGenreId(),
 			comment);
 	}
 

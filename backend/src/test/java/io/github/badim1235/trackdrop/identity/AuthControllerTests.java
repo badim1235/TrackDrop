@@ -14,6 +14,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import io.github.badim1235.trackdrop.TestcontainersConfiguration;
 import jakarta.servlet.http.Cookie;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.OffsetDateTime;
+import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -21,6 +25,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
@@ -32,6 +37,9 @@ class AuthControllerTests {
 
 	@Autowired
 	private MockMvc mockMvc;
+
+	@Autowired
+	private JdbcClient jdbcClient;
 
 	@MockitoBean
 	private SupabaseAuthGateway supabaseAuth;
@@ -103,6 +111,76 @@ class AuthControllerTests {
 		mockMvc.perform(get("/api/v1/me").cookie(sessionCookie))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.account.email").value(email));
+	}
+
+	@Test
+	void reconnectsALegacyLocalProfileAfterSuccessfulSupabaseLogin() throws Exception {
+		String email = uniqueEmail();
+		UUID legacyId = UUID.randomUUID();
+		UUID supabaseId = UUID.randomUUID();
+		String nickname = "연결복구" + UUID.randomUUID().toString().substring(0, 8);
+		OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
+		LocalDate today = LocalDate.now(ZoneId.of("Asia/Seoul"));
+		jdbcClient.sql("""
+				INSERT INTO users (
+					id, email, email_normalized, email_verified_at,
+					public_nickname, status, created_at, updated_at
+				)
+				VALUES (:id, :email, :email, :now, :nickname, 'ACTIVE', :now, :now)
+				""")
+			.param("id", legacyId)
+			.param("email", email)
+			.param("nickname", nickname)
+			.param("now", now)
+			.update();
+		jdbcClient.sql("""
+				INSERT INTO daily_recommendation_quotas (
+					user_id, quota_date, daily_limit, used_count, updated_at
+				)
+				VALUES (:userId, :today, 4, 1, :now)
+				""")
+			.param("userId", legacyId)
+			.param("today", today)
+			.param("now", now)
+			.update();
+		when(supabaseAuth.signIn(email, "chatgpt5555"))
+			.thenReturn(new SupabaseAuthGateway.AuthenticatedUser(supabaseId, email, Instant.now()));
+
+		login(email, false)
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.account.publicNickname").value(nickname))
+			.andExpect(jsonPath("$.quota.used").value(1));
+
+		UUID storedUserId = jdbcClient.sql("SELECT id FROM users WHERE email_normalized = :email")
+			.param("email", email)
+			.query(UUID.class)
+			.single();
+		UUID quotaUserId = jdbcClient.sql("""
+				SELECT user_id FROM daily_recommendation_quotas
+				WHERE quota_date = :today AND user_id = :userId
+				""")
+			.param("today", today)
+			.param("userId", supabaseId)
+			.query(UUID.class)
+			.single();
+		org.assertj.core.api.Assertions.assertThat(storedUserId).isEqualTo(supabaseId);
+		org.assertj.core.api.Assertions.assertThat(quotaUserId).isEqualTo(supabaseId);
+	}
+
+	@Test
+	void doesNotTurnUnexpectedSignupFailuresIntoAuthenticationErrors() throws Exception {
+		String email = uniqueEmail();
+		when(supabaseUsers.existsByEmail(email)).thenThrow(new IllegalStateException("directory unavailable"));
+
+		mockMvc.perform(post("/api/v1/auth/sign-up")
+				.with(csrf())
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("""
+					{"email":"%s","password":"chatgpt5555"}
+					""".formatted(email)))
+			.andExpect(status().isInternalServerError())
+			.andExpect(jsonPath("$.error.code").value("INTERNAL_SERVER_ERROR"))
+			.andExpect(jsonPath("$.error.message").value("요청을 처리하지 못했습니다. 다시 시도해 주세요."));
 	}
 
 	@Test
