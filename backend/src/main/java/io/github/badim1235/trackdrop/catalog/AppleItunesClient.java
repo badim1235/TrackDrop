@@ -7,6 +7,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.stereotype.Component;
@@ -18,6 +20,7 @@ import tools.jackson.databind.ObjectMapper;
 
 @Component
 final class AppleItunesClient implements MusicCatalogProvider {
+	private static final Logger LOGGER = LoggerFactory.getLogger(AppleItunesClient.class);
 	private static final String USER_AGENT = "Mozilla/5.0 (compatible; TrackPick/1.0)";
 
 	private final RestClient restClient;
@@ -88,6 +91,7 @@ final class AppleItunesClient implements MusicCatalogProvider {
 				.header(HttpHeaders.USER_AGENT, USER_AGENT)
 				.retrieve()
 				.onStatus(HttpStatusCode::isError, (request, response) -> {
+					LOGGER.warn("Apple iTunes returned HTTP {} for {}", response.getStatusCode(), uri.getPath());
 					throw MusicSearchException.providerUnavailable();
 				})
 				.body(String.class);
@@ -97,7 +101,15 @@ final class AppleItunesClient implements MusicCatalogProvider {
 			return mapTracks(objectMapper.readValue(body, AppleSearchPayload.class));
 		} catch (MusicSearchException exception) {
 			throw exception;
-		} catch (RestClientException | JacksonException exception) {
+		} catch (RestClientException exception) {
+			LOGGER.warn(
+				"Apple iTunes request to {}{} failed with {}",
+				uri.getHost(),
+				uri.getPath(),
+				exception.getClass().getSimpleName());
+			throw MusicSearchException.providerUnavailable();
+		} catch (JacksonException exception) {
+			LOGGER.warn("Apple iTunes returned an unreadable response for {}", uri.getPath());
 			throw MusicSearchException.providerUnavailable();
 		}
 	}

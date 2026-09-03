@@ -54,7 +54,7 @@ trackdrop:
       cache-ttl: 5m
       cache-maximum-size: 500
       connect-timeout: 2s
-      read-timeout: 4s
+      read-timeout: 12s
 
 management:
   endpoints:
