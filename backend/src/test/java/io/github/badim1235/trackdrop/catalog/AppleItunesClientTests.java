@@ -138,6 +138,37 @@ class AppleItunesClientTests {
 	}
 
 	@Test
+	void fallsBackToTheUsStorefrontWhenTheKrSearchIsEmpty() {
+		RestClient.Builder builder = RestClient.builder().baseUrl("https://itunes.apple.com");
+		MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+		AppleItunesClient client = new AppleItunesClient(
+			builder.build(),
+			properties(),
+			new ProviderCallRateLimiter(15, Clock.systemUTC()),
+			new ObjectMapper());
+
+		server.expect(requestTo(
+			"https://itunes.apple.com/search?term=Radiohead&country=KR&media=music&entity=song&limit=20&explicit=Yes&lang=en_us"))
+			.andRespond(withSuccess("{\"resultCount\":0,\"results\":[]}", MediaType.APPLICATION_JSON));
+		server.expect(requestTo(
+			"https://itunes.apple.com/search?term=Radiohead&country=US&media=music&entity=song&limit=20&explicit=Yes&lang=en_us"))
+			.andRespond(withSuccess("""
+				{"results":[{
+				  "kind":"song",
+				  "trackId":1097862870,
+				  "trackName":"Let Down",
+				  "artistName":"Radiohead"
+				}]}
+				""", MediaType.APPLICATION_JSON));
+
+		assertThat(client.search("Radiohead"))
+			.singleElement()
+			.extracting(MusicCatalogTrack::title)
+			.isEqualTo("Let Down");
+		server.verify();
+	}
+
+	@Test
 	void looksUpTheSelectedTrackBeforeRecommendation() {
 		RestClient.Builder builder = RestClient.builder().baseUrl("https://itunes.apple.com");
 		MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
@@ -168,10 +199,41 @@ class AppleItunesClientTests {
 		server.verify();
 	}
 
+	@Test
+	void fallsBackToTheUsStorefrontWhenTheKrLookupIsEmpty() {
+		RestClient.Builder builder = RestClient.builder().baseUrl("https://itunes.apple.com");
+		MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+		AppleItunesClient client = new AppleItunesClient(
+			builder.build(),
+			properties(),
+			new ProviderCallRateLimiter(15, Clock.systemUTC()),
+			new ObjectMapper());
+
+		server.expect(requestTo(
+			"https://itunes.apple.com/lookup?id=1828393595&country=KR&entity=song&lang=en_us"))
+			.andRespond(withSuccess("{\"resultCount\":0,\"results\":[]}", MediaType.APPLICATION_JSON));
+		server.expect(requestTo(
+			"https://itunes.apple.com/lookup?id=1828393595&country=US&entity=song&lang=en_us"))
+			.andRespond(withSuccess("""
+				{"results":[{
+				  "kind":"song",
+				  "trackId":1828393595,
+				  "trackName":"0+0",
+				  "artistName":"한로로",
+				  "primaryGenreName":"Rock"
+				}]}
+				""", MediaType.APPLICATION_JSON));
+
+		assertThat(client.lookup("1828393595"))
+			.hasValueSatisfying(track -> assertThat(track.title()).isEqualTo("0+0"));
+		server.verify();
+	}
+
 	private static AppleItunesProperties properties() {
 		return new AppleItunesProperties(
 			URI.create("https://itunes.apple.com"),
 			"KR",
+			"US",
 			20,
 			15,
 			Duration.ofMinutes(5),

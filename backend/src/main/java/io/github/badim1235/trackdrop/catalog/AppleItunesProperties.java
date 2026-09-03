@@ -8,6 +8,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 record AppleItunesProperties(
 	URI baseUrl,
 	String storefront,
+	String fallbackStorefront,
 	int resultLimit,
 	int callsPerMinute,
 	Duration cacheTtl,

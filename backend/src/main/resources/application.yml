@@ -48,6 +48,7 @@ trackdrop:
     apple:
       base-url: ${APPLE_ITUNES_BASE_URL:https://itunes.apple.com}
       storefront: KR
+      fallback-storefront: US
       result-limit: 20
       calls-per-minute: 15
       cache-ttl: 5m

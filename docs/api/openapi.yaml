@@ -176,7 +176,7 @@ paths:
             maxLength: 100
       responses:
         '200':
-          description: Up to 20 relevant songs from the KR storefront, including explicit tracks.
+          description: Up to 20 relevant songs from the KR storefront, with a US fallback when KR is empty, including explicit tracks.
           content:
             application/json:
               schema:

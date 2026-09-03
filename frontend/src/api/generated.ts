@@ -958,7 +958,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Up to 20 relevant songs from the KR storefront, including explicit tracks. */
+            /** @description Up to 20 relevant songs from the KR storefront, with a US fallback when KR is empty, including explicit tracks. */
             200: {
                 headers: {
                     [name: string]: unknown;

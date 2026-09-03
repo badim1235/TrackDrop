@@ -268,7 +268,7 @@ stateDiagram-v2
 
 - 곡명, 아티스트 또는 둘을 함께 입력
 - 명시적 검색 버튼과 Enter 지원
-- `KR` storefront를 기본으로 사용하고 관련도순 상위 20곡을 표시
+- `KR` storefront를 기본으로 사용하고 빈 결과일 때 `US` storefront로 보완해 관련도순 상위 20곡을 표시
 - Explicit 곡도 결과에 포함하며 각 항목에 `Explicit`을 명시
 - 최근 검색 기록은 MVP에서 저장하지 않음
 - 최소 입력 길이와 검색 중 상태 표시

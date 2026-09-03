@@ -466,6 +466,27 @@ describe('TrackPick app shell', () => {
     expect(screen.getByRole('link', { name: '로그인으로 돌아가기' })).toHaveAttribute('href', '/login')
   })
 
+  it('accepts an empty password recovery response', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      const url = String(input)
+      if (url === '/api/v1/me') return new Response('', { status: 401 })
+      if (url === '/api/v1/auth/csrf') return Response.json({ token: 'csrf-token' })
+      if (url === '/api/v1/auth/password-recovery' && init?.method === 'POST') {
+        expect(JSON.parse(String(init.body))).toEqual({ email: 'listener@example.com' })
+        return new Response(null, { status: 202 })
+      }
+      return new Response('', { status: 404 })
+    })
+    const user = userEvent.setup()
+    renderApp('/recover/password')
+
+    await user.type(screen.getByLabelText('이메일'), 'listener@example.com')
+    await user.click(screen.getByRole('button', { name: '재설정 메일 보내기' }))
+
+    expect(await screen.findByText('메일을 보냈습니다. 받은 메일함을 확인해 주세요.')).toBeInTheDocument()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
   it('validates the confirmed signup policy before submission', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('', { status: 401 }))
     const user = userEvent.setup()

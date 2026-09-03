@@ -550,7 +550,7 @@ Query:
 | --- | --- | --- |
 | `query` | Y | 곡명, 아티스트 또는 조합, 1~100자 |
 
-MVP는 `country=KR`, `media=music`, `entity=song`, `limit=20`, `explicit=Yes`로 검색한다. Apple이 반환한 관련도 순서를 유지하며 별도 pagination은 제공하지 않는다.
+MVP는 `country=KR`, `media=music`, `entity=song`, `limit=20`, `explicit=Yes`로 우선 검색한다. KR 응답이 비어 있으면 동일 조건의 `country=US` 검색으로 보완한다. Apple이 반환한 관련도 순서를 유지하며 별도 pagination은 제공하지 않는다.
 
 Response `200 OK`:
 

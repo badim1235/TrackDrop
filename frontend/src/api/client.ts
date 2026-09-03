@@ -74,7 +74,8 @@ async function mutate<T>(path: string, body?: unknown): Promise<T> {
     body: body === undefined ? undefined : JSON.stringify(body),
   })
   if (!response.ok) throw await parseError(response)
-  return response.status === 204 ? undefined as T : response.json() as Promise<T>
+  const responseText = await response.text()
+  return responseText ? JSON.parse(responseText) as T : undefined as T
 }
 
 export async function fetchSystemHealth(): Promise<SystemHealth> {

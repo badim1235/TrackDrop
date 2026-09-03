@@ -203,6 +203,7 @@ Apple iTunes Search API 요청은 backend만 수행한다.
 
 ```text
 country=KR
+fallback country=US when the KR result is empty
 media=music
 entity=song
 limit=20

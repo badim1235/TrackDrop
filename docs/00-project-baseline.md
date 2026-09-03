@@ -37,7 +37,7 @@ TrackPick은 익명 계정 사용자들이 자신이 좋아하는 음악을 소�
 | 순위 | `ROW_NUMBER`를 사용한다. Vote 수 내림차순, Track 이름의 대소문자를 구분하지 않는 오름차순, 아티스트명 오름차순, Track ID 오름차순으로 고유 순서를 정한다. |
 | 오늘 차트 | 오늘의 Vote를 실시간 집계하는 `LIVE` 차트다. |
 | 과거 차트 | 자정 배치로 전체·장르별 Top 50을 확정한 `DailyRanking` snapshot을 `FINAL` 읽기 전용 목록으로 제공한다. 화면은 20곡을 먼저 보여주고 더 보기로 나머지 30곡을 제공하며, Vote와 신규 추천은 제공하지 않는다. |
-| 음악 검색 | 첫 provider adapter는 Apple iTunes Search API다. `KR` storefront에서 Explicit 곡을 포함한 관련도순 상위 20곡을 표시하고 Explicit 여부를 명시한다. 내부 Track ID와 외부 provider ID를 분리하고 가능한 경우 ISRC를 보존한다. |
+| 음악 검색 | 첫 provider adapter는 Apple iTunes Search API다. `KR` storefront를 우선 조회하고 빈 결과일 때 `US` storefront로 보완한다. Explicit 곡을 포함한 관련도순 상위 20곡을 표시하고 Explicit 여부를 명시한다. 내부 Track ID와 외부 provider ID를 분리하고 가능한 경우 ISRC를 보존한다. |
 | 미리듣기 | Apple이 공식 제공한 30초 preview URL만 원본에서 스트리밍한다. 시작 위치는 provider가 선택하므로 인트로라고 보장하지 않는다. |
 | 재생 금지 사항 | YouTube player/embed를 사용하지 않고 음원을 다운로드, 절단, 변환, 캐시 또는 재호스팅하지 않는다. |
 | 외부 듣기 | Apple이 응답한 외부 Track 링크와 요구되는 Store attribution을 preview 가까이에 표시한다. |

@@ -49,12 +49,33 @@ final class AppleItunesClient implements MusicCatalogProvider {
 
 	@Override
 	public List<MusicCatalogTrack> search(String query) {
-		return fetch(searchUri(query));
+		List<MusicCatalogTrack> tracks = fetch(searchUri(query, properties.storefront()));
+		return tracks.isEmpty() && hasFallbackStorefront()
+			? fetch(searchUri(query, properties.fallbackStorefront()))
+			: tracks;
 	}
 
 	@Override
 	public Optional<MusicCatalogTrack> lookup(String externalTrackId) {
-		return fetch(lookupUri(externalTrackId)).stream()
+		Optional<MusicCatalogTrack> track = findById(
+			fetch(lookupUri(externalTrackId, properties.storefront())),
+			externalTrackId);
+		return track.isEmpty() && hasFallbackStorefront()
+			? findById(fetch(lookupUri(externalTrackId, properties.fallbackStorefront())), externalTrackId)
+			: track;
+	}
+
+	private boolean hasFallbackStorefront() {
+		return properties.fallbackStorefront() != null
+			&& !properties.fallbackStorefront().isBlank()
+			&& !properties.fallbackStorefront().equalsIgnoreCase(properties.storefront());
+	}
+
+	private static Optional<MusicCatalogTrack> findById(
+		List<MusicCatalogTrack> tracks,
+		String externalTrackId
+	) {
+		return tracks.stream()
 			.filter(track -> track.externalTrackId().equals(externalTrackId))
 			.findFirst();
 	}
@@ -81,11 +102,11 @@ final class AppleItunesClient implements MusicCatalogProvider {
 		}
 	}
 
-	private URI searchUri(String query) {
+	private URI searchUri(String query, String storefront) {
 		return UriComponentsBuilder.fromUri(properties.baseUrl())
 			.path("/search")
 			.queryParam("term", "{term}")
-			.queryParam("country", properties.storefront())
+			.queryParam("country", storefront)
 			.queryParam("media", "music")
 			.queryParam("entity", "song")
 			.queryParam("limit", properties.resultLimit())
@@ -96,11 +117,11 @@ final class AppleItunesClient implements MusicCatalogProvider {
 			.toUri();
 	}
 
-	private URI lookupUri(String externalTrackId) {
+	private URI lookupUri(String externalTrackId, String storefront) {
 		return UriComponentsBuilder.fromUri(properties.baseUrl())
 			.path("/lookup")
 			.queryParam("id", "{id}")
-			.queryParam("country", properties.storefront())
+			.queryParam("country", storefront)
 			.queryParam("entity", "song")
 			.queryParam("lang", "en_us")
 			.encode(StandardCharsets.UTF_8)
